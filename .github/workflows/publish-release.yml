@@ -30,6 +30,12 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           TAG="v${VERSION}"
           gh release delete "$TAG" --yes --cleanup-tag || true
-          gh release create "$TAG" release/DragLab_Update.zip \
-            --title "DragLab AI $TAG" \
-            --notes-file release/notes.md
+          if [ -f release/DragLab_Update.zip ]; then
+            gh release create "$TAG" release/DragLab_Update.zip \
+              --title "DragLab AI $TAG" \
+              --notes-file release/notes.md
+          else
+            gh release create "$TAG" \
+              --title "DragLab AI $TAG" \
+              --notes-file release/notes.md
+          fi

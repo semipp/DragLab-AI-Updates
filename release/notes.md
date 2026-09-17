@@ -4,5 +4,6 @@ Initial updater bootstrap release for the permanent DragLab AI launcher.
 - Automatic quarter-mile recorder
 - Setup/JBeam variable scanner
 - Persistent local run data
+- Public updater channel connected
 
 Next release target: v0.3 Auto-Tune MVP.

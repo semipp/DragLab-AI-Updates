@@ -1,0 +1,35 @@
+name: Publish DragLab Update
+
+on:
+  push:
+    paths:
+      - 'release/DragLab_Update.zip'
+      - 'release/version.txt'
+      - 'release/notes.md'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "version=$(cat release/version.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          TAG="v${VERSION}"
+          gh release delete "$TAG" --yes --cleanup-tag || true
+          gh release create "$TAG" release/DragLab_Update.zip \
+            --title "DragLab AI $TAG" \
+            --notes-file release/notes.md

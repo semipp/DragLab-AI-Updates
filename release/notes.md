@@ -1,9 +1,10 @@
-JLRP DragLab v0.3.6 - Reset-Gated Closed-Loop Auto-Tune
+JLRP DragLab v0.3.7 - Automatic Private Run Sync
 
-- First live Auto-Tune test succeeded: rear tire pressure 28.0 -> 27.5 psi produced a new BeamNG OFFICIAL PB of 6.220 from the 6.224 baseline.
-- Fixes the next tune being fired immediately after the official slip while the car is still at the finish line / RESET REQUIRED.
-- After KEEP, JLRP now waits for you to reset/recover the vehicle, then automatically applies the next controlled experiment.
-- After REVERT, JLRP also waits for reset/recover, restores the full best setup, verifies it, then continues.
-- Verification timeout increased from 20 to 45 seconds for heavy modded vehicles.
-- Keeps v0.3.5 reversed-bound validation and v0.3.4 full-setup preservation.
-- BeamNG OFFICIAL quarter-mile ET remains the KEEP/REVERT judge.
+- Stops the manual copy/paste workflow: JLRP can now automatically sync run data to the PRIVATE semipp/DragLab-AI GitHub repository.
+- Adds a Setup Run Sync button to the dashboard. One-time setup installs/signs in GitHub CLI if needed; JLRP never stores a GitHub password or token.
+- After setup, every official pass and Auto-Tune state change updates run-data/latest.json automatically.
+- The private snapshot includes the latest run, best official run, current Auto-Tune experiment/decision, current 39-variable setup, and recent run history.
+- ChatGPT can then read the private repo directly when James says "check the latest JLRP run".
+- Official BeamNG slip capture now also stores Reaction Time, 330 ft and 1000 ft when exposed, in addition to 60 ft, 1/8 ET + MPH, and 1/4 ET + MPH.
+- Telemetry sample spam is excluded from the GitHub snapshot to keep it compact; the full local runs.json remains unchanged.
+- Keeps v0.3.6 reset-gated closed-loop Auto-Tune, v0.3.5 reversed-bound handling, and full-setup preservation.

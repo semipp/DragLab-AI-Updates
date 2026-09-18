@@ -5,6 +5,7 @@ on:
     paths:
       - 'release/version.txt'
       - 'release/notes.md'
+      - 'release/build_v037.py'
       - '.github/workflows/publish-release.yml'
 
 permissions:
@@ -17,149 +18,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build v0.3.6 from verified v0.3.5 base
+      - name: Build v0.3.7 from verified v0.3.6 base
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf base build
+          rm -rf base build bridge_work_v037
           mkdir -p base build
-          gh release download v0.3.5 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          gh release download v0.3.6 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-
-          python3 - <<'PY'
-          from pathlib import Path
-          import json
-
-          app = Path('build/app')
-
-          p = app / 'version.json'
-          d = json.loads(p.read_text())
-          d['version'] = '0.3.6'
-          p.write_text(json.dumps(d, indent=2) + '\n')
-
-          p = app / 'DragLab_Server.ps1'
-          s = p.read_text().replace('v0.3.5', 'v0.3.6')
-
-          old_keep = "\n".join([
-              "        $autoTune.lastDecision = (\"KEEP: {0} improved ET by {1:N3}s ({2:N3} -> {3:N3}).\" -f $c.title,[Math]::Abs($delta),$oldEt,$newEt)",
-              "        $autoTune.currentExperiment = $null",
-              "        Save-AutoTune",
-              "        Start-NextAutoTuneExperiment"
-          ])
-          new_keep = "\n".join([
-              "        $autoTune.lastDecision = (\"KEEP: {0} improved ET by {1:N3}s ({2:N3} -> {3:N3}). Reset/recover the vehicle; the next test will apply automatically once the car is back idle/staged.\" -f $c.title,[Math]::Abs($delta),$oldEt,$newEt)",
-              "        $autoTune.currentExperiment = $null",
-              "        $autoTune.phase = 'WAITING FOR RESET'",
-              "        Save-AutoTune"
-          ])
-          if old_keep not in s:
-              raise RuntimeError('KEEP block not found')
-          s = s.replace(old_keep, new_keep, 1)
-
-          old_revert = "\n".join([
-              "        $bestValue = Get-SetupValue $autoTune.bestSetup $c.name",
-              "        $vals = Convert-SetupToValues $autoTune.bestSetup $null $null",
-              "        $word = if ([Math]::Abs($delta) -le $threshold) { 'neutral/noise-range' } else { 'slower' }",
-              "        $autoTune.lastDecision = (\"REVERT: {0} was {1} ({2:N3} vs best {3:N3}). Restoring {4}.\" -f $c.title,$word,$newEt,$oldEt,$bestValue)",
-              "        $autoTune.currentExperiment = $null",
-              "        Save-AutoTune",
-              "        Send-AutoTuneValues $vals 'revert' $autoTune.lastDecision"
-          ])
-          new_revert = "\n".join([
-              "        $bestValue = Get-SetupValue $autoTune.bestSetup $c.name",
-              "        $word = if ([Math]::Abs($delta) -le $threshold) { 'neutral/noise-range' } else { 'slower' }",
-              "        $autoTune.lastDecision = (\"REVERT: {0} was {1} ({2:N3} vs best {3:N3}). Reset/recover the vehicle; JLRP will restore the best setup automatically before the next test.\" -f $c.title,$word,$newEt,$oldEt)",
-              "        $autoTune.currentExperiment = $null",
-              "        $autoTune.phase = 'WAITING FOR RESET TO REVERT'",
-              "        Save-AutoTune"
-          ])
-          if old_revert not in s:
-              raise RuntimeError('REVERT block not found')
-          s = s.replace(old_revert, new_revert, 1)
-
-          old_house = "\n".join([
-              "function Update-AutoTuneHousekeeping {",
-              "    if ($null -eq $autoTune.pendingApply) { return }",
-              "    try {",
-              "        $sent = [DateTime]::Parse([string]$autoTune.pendingApply.sentAt).ToUniversalTime()",
-              "        $age = ([DateTime]::UtcNow - $sent).TotalSeconds",
-              "        if ($age -gt 20) {",
-              "            $autoTune.active = $false",
-              "            $autoTune.phase = 'ERROR'",
-              "            $autoTune.lastError = 'BeamNG did not verify the tune change within 20 seconds.'",
-              "            $autoTune.lastDecision = 'AUTO-TUNE ERROR: tune change was not verified. Use Restore Best Setup or repair/restart the BeamNG bridge.'",
-              "            $autoTune.pendingApply = $null",
-              "            $autoTune.currentExperiment = $null",
-              "            Save-AutoTune",
-              "        }",
-              "    } catch {}",
-              "}",
-              ""
-          ])
-          new_house = "\n".join([
-              "function Update-AutoTuneHousekeeping {",
-              "    # After a pass, never fire the next tune into a car that is still at the",
-              "    # finish line / RESET REQUIRED. Wait for the user to recover/reset first.",
-              "    if ($autoTune.active -and $null -eq $autoTune.pendingApply) {",
-              "        $readyStatus = $state.status -in @('IDLE','ARMED')",
-              "        $stopped = $true",
-              "        try {",
-              "            if ($null -ne $state.telemetry -and $null -ne $state.telemetry.speedMph) {",
-              "                $stopped = [Math]::Abs([double]$state.telemetry.speedMph) -lt 1.0",
-              "            }",
-              "        } catch { $stopped = $true }",
-              "",
-              "        if ($readyStatus -and $stopped) {",
-              "            if ($autoTune.phase -eq 'WAITING FOR RESET') {",
-              "                $autoTune.phase = 'PREPARING NEXT TEST'",
-              "                Save-AutoTune",
-              "                Start-NextAutoTuneExperiment",
-              "                return",
-              "            }",
-              "            if ($autoTune.phase -eq 'WAITING FOR RESET TO REVERT') {",
-              "                $vals = Convert-SetupToValues $autoTune.bestSetup $null $null",
-              "                if ($vals.PSObject.Properties.Count -eq 0) {",
-              "                    $autoTune.active = $false",
-              "                    $autoTune.phase = 'ERROR'",
-              "                    $autoTune.lastError = 'Best setup is empty; cannot revert.'",
-              "                    $autoTune.lastDecision = 'AUTO-TUNE ERROR: best setup could not be restored.'",
-              "                    Save-AutoTune",
-              "                    return",
-              "                }",
-              "                Send-AutoTuneValues $vals 'revert' 'Reset detected. Restoring the best known setup before the next controlled test.'",
-              "                return",
-              "            }",
-              "        }",
-              "    }",
-              "",
-              "    if ($null -eq $autoTune.pendingApply) { return }",
-              "    try {",
-              "        $sent = [DateTime]::Parse([string]$autoTune.pendingApply.sentAt).ToUniversalTime()",
-              "        $age = ([DateTime]::UtcNow - $sent).TotalSeconds",
-              "        if ($age -gt 45) {",
-              "            $autoTune.active = $false",
-              "            $autoTune.phase = 'ERROR'",
-              "            $autoTune.lastError = 'BeamNG did not verify the tune change within 45 seconds.'",
-              "            $autoTune.lastDecision = 'AUTO-TUNE ERROR: tune change was not verified. Use Restore Best Setup or repair/restart the BeamNG bridge.'",
-              "            $autoTune.pendingApply = $null",
-              "            $autoTune.currentExperiment = $null",
-              "            Save-AutoTune",
-              "        }",
-              "    } catch {}",
-              "}",
-              ""
-          ])
-          if old_house not in s:
-              raise RuntimeError('housekeeping block not found')
-          s = s.replace(old_house, new_house, 1)
-
-          p.write_text(s)
-
-          p = app / 'www' / 'index.html'
-          p.write_text(p.read_text().replace('v0.3.5', 'v0.3.6'))
-          PY
+          python3 release/build_v037.py build
 
           rm -f release/DragLab_Update.zip
           (cd build && zip -qr ../release/DragLab_Update.zip app)
@@ -167,19 +36,48 @@ jobs:
           test "$(stat -c%s release/DragLab_Update.zip)" -gt 30000
           unzip -t release/DragLab_Update.zip
 
+      - name: Verify v0.3.7 package
+        shell: bash
+        run: |
           python3 - <<'PY'
-          import json, zipfile
+          import json, zipfile, io
           z = zipfile.ZipFile('release/DragLab_Update.zip')
           v = json.loads(z.read('app/version.json'))
-          assert v['version'] == '0.3.6'
+          assert v['version'] == '0.3.7'
+          assert v['bridgeVersion'] == '0.3.7'
+
+          names = set(z.namelist())
+          assert 'app/Sync_JLRP_RunData.ps1' in names
+          assert 'app/Setup_JLRP_Run_Sync.ps1' in names
+          assert 'app/Setup_JLRP_Run_Sync.bat' in names
+
           server = z.read('app/DragLab_Server.ps1').decode()
-          assert "phase = 'WAITING FOR RESET'" in server
-          assert "phase = 'WAITING FOR RESET TO REVERT'" in server
-          assert "Start-NextAutoTuneExperiment" in server
-          assert "if ($age -gt 45)" in server
-          assert "finish line / RESET REQUIRED" in server
-          print('Verified JLRP v0.3.6 reset-gated Auto-Tune continuation')
+          assert "repo = 'semipp/DragLab-AI'" in server
+          assert "path = 'run-data/latest.json'" in server
+          assert "Request-RunSync 'official-pass'" in server
+          assert "runSync = (Get-RunSyncStatus)" in server
+          assert "officialThreeThirty" in server
+          assert "officialThousand" in server
+          assert "officialReaction" in server
+
+          html = z.read('app/www/index.html').decode()
+          assert 'id="syncSetupBtn"' in html
+          assert 'Private Run Sync' in html
+          assert 'v0.3.7' in html
+
+          bz = zipfile.ZipFile(io.BytesIO(z.read('app/BeamNG_Mod/draglab_bridge_v0.2.zip')))
+          ge = bz.read('lua/ge/extensions/draglabOfficialSync.lua').decode()
+          assert "threeThirty = slip.threeThirty" in ge
+          assert "thousand = slip.thousand" in ge
+          assert "reaction = slip.reaction" in ge
+          print('Verified JLRP v0.3.7 private run sync + full official split capture')
           PY
+
+          mkdir -p verify_app
+          unzip -q release/DragLab_Update.zip -d verify_app
+          pwsh -NoProfile -Command '$tokens=$null;$errors=$null;[System.Management.Automation.Language.Parser]::ParseFile("verify_app/app/DragLab_Server.ps1",[ref]$tokens,[ref]$errors)|Out-Null;if($errors.Count){$errors|ForEach-Object{Write-Error $_};exit 1}'
+          pwsh -NoProfile -Command '$tokens=$null;$errors=$null;[System.Management.Automation.Language.Parser]::ParseFile("verify_app/app/Sync_JLRP_RunData.ps1",[ref]$tokens,[ref]$errors)|Out-Null;if($errors.Count){$errors|ForEach-Object{Write-Error $_};exit 1}'
+          pwsh -NoProfile -Command '$tokens=$null;$errors=$null;[System.Management.Automation.Language.Parser]::ParseFile("verify_app/app/Setup_JLRP_Run_Sync.ps1",[ref]$tokens,[ref]$errors)|Out-Null;if($errors.Count){$errors|ForEach-Object{Write-Error $_};exit 1}'
 
       - name: Read version
         id: version
@@ -194,6 +92,4 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           TAG="v${VERSION}"
           gh release delete "$TAG" --yes --cleanup-tag || true
-          gh release create "$TAG" release/DragLab_Update.zip \
-            --title "JLRP DragLab $TAG" \
-            --notes-file release/notes.md
+          gh release create "$TAG" release/DragLab_Update.zip             --title "JLRP DragLab $TAG"             --notes-file release/notes.md

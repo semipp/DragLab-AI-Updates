@@ -67,7 +67,7 @@ jobs:
                   raise RuntimeError('candidate helper insertion point not found')
               s = s.replace(needle, helper + needle, 1)
 
-          pat = re.compile(r"\$vals = \[pscustomobject\]@\{\}\r?\n\s*\$vals \| Add-Member -NotePropertyName \$c\.name -NotePropertyValue \(\[double\]\$target\)")
+          pat = re.compile(r"\$vals = \[pscustomobject\]@\{\}\r?\n\s*\$vals \| Add-Member -NotePropertyName \$c\.name -NotePropertyValue \$target")
           s, n = pat.subn(r"$vals = Convert-SetupToValues $autoTune.bestSetup $c.name ([double]$target)", s, count=1)
           if n != 1:
               raise RuntimeError(f'experiment full-setup patch count={n}')

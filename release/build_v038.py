@@ -193,15 +193,20 @@ p.write_text(h)
 for helper in ("Setup_JLRP_Run_Sync.ps1", "Sync_JLRP_RunData.ps1"):
     p = app / helper
     t = p.read_text().replace("0.3.7", "0.3.8")
-    old = """& $gh auth status --hostname github.com *> $null
-if ($LASTEXITCODE -ne 0) {"""
-    new = """$oldEap = $ErrorActionPreference
-$ErrorActionPreference = 'SilentlyContinue'
-& $gh auth status --hostname github.com *> $null
-$authExit = $LASTEXITCODE
-$ErrorActionPreference = $oldEap
-if ($authExit -ne 0) {"""
-    t = replace_once(t, old, new, helper + " auth status")
+    auth_pattern = re.compile(r"(?m)^(\\s*)& \\$gh auth status --hostname github\\.com \\*> \\$null\\n\\1if \\(\\$LASTEXITCODE -ne 0\\) \\{")
+    m = auth_pattern.search(t)
+    if not m:
+        raise RuntimeError(helper + " auth status not found")
+    indent = m.group(1)
+    replacement = (
+        indent + "$oldEap = $ErrorActionPreference\\n" +
+        indent + "$ErrorActionPreference = 'SilentlyContinue'\\n" +
+        indent + "& $gh auth status --hostname github.com *> $null\\n" +
+        indent + "$authExit = $LASTEXITCODE\\n" +
+        indent + "$ErrorActionPreference = $oldEap\\n" +
+        indent + "if ($authExit -ne 0) {"
+    )
+    t = t[:m.start()] + replacement + t[m.end():]
     p.write_text(t)
 
 # Bridge version bump; functionality stays the same.

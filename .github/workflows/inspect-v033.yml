@@ -21,15 +21,9 @@ jobs:
           gh release download v0.3.3 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
           unzip -q build/app/BeamNG_Mod/draglab_bridge_v0.2.zip -d bridge
-      - name: Inspect server Auto-Tune code
+      - name: Show Auto-Tune server core
         run: |
-          echo "=== SERVER MATCHES ==="
-          grep -nEi "AutoTune|Auto-Tune|Send-BeamCommand|bestEt|best.*setup|tirepressure|apply.*tune|set.*variable|reload|respawn" build/app/DragLab_Server.ps1 || true
-          echo "=== SERVER CONTEXT 250-650 ==="
-          sed -n '250,650p' build/app/DragLab_Server.ps1
-      - name: Inspect bridge apply code
+          sed -n '120,440p' build/app/DragLab_Server.ps1
+      - name: Show bridge apply code
         run: |
-          echo "=== BRIDGE MATCHES ==="
-          grep -nEi "command|apply|variable|set.*var|partConfig|config|reload|respawn|queueLua|tirepressure|jbeam" bridge/lua/vehicle/extensions/auto/draglabTelemetry.lua || true
-          echo "=== BRIDGE CONTEXT ==="
-          sed -n '1,360p' bridge/lua/vehicle/extensions/auto/draglabTelemetry.lua
+          sed -n '120,230p' bridge/lua/vehicle/extensions/auto/draglabTelemetry.lua

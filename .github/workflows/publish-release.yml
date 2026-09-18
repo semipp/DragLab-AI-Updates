@@ -46,8 +46,7 @@ jobs:
 
           p = app / 'www' / 'index.html'
           s = p.read_text().replace('v0.3.1', 'v0.3.2')
-          s = s.replace('No tuning variables received yet. Connect BeamNG and spawn a vehicle.',
-                        'Waiting for full tuning-variable payload from BeamNG...')
+          s = s.replace('No tuning variables received yet. Connect BeamNG and spawn a vehicle.', 'Waiting for full tuning-variable payload from BeamNG...')
           p.write_text(s)
 
           bridge_zip = app / 'BeamNG_Mod' / 'draglab_bridge_v0.2.zip'
@@ -64,27 +63,10 @@ jobs:
           info.write_text(json.dumps(idata, indent=2) + '\n')
 
           lua = work / 'lua' / 'vehicle' / 'extensions' / 'auto' / 'draglabTelemetry.lua'
-          s = lua.read_text()
-          s = s.replace('v0.3.1', 'v0.3.2')
-
-          old = """  helloTimer = helloTimer + dt
-  if helloTimer >= HELLO_INTERVAL then
-    helloTimer = 0
-    sendHello(false)
-  end
-"""
-          new = """  helloTimer = helloTimer + dt
-  if helloTimer >= HELLO_INTERVAL then
-    helloTimer = 0
-    -- v0.3.2: force the complete setup payload each retry. The top-level count
-    -- can be correct before the desktop has the actual table, so hash-only
-    -- retries can leave Setup Scanner empty forever.
-    sendHello(true)
-  end
-"""
-          if old not in s:
-              raise RuntimeError('v0.3.1 hello retry block not found')
-          s = s.replace(old, new, 1)
+          s = lua.read_text().replace('v0.3.1', 'v0.3.2')
+          if 'sendHello(false)' not in s:
+              raise RuntimeError('v0.3.1 retry call not found')
+          s = s.replace('sendHello(false)', 'sendHello(true)', 1)
           lua.write_text(s)
 
           with zipfile.ZipFile(bridge_zip, 'w', zipfile.ZIP_DEFLATED) as z:
@@ -107,7 +89,6 @@ jobs:
           bz = zipfile.ZipFile(io.BytesIO(z.read('app/BeamNG_Mod/draglab_bridge_v0.2.zip')))
           lua = bz.read('lua/vehicle/extensions/auto/draglabTelemetry.lua').decode()
           assert 'sendHello(true)' in lua
-          assert 'force the complete setup payload' in lua
           print('Verified JLRP v0.3.2 full setup payload retry')
           PY
 

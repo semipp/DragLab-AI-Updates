@@ -17,87 +17,144 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build v0.3.5 from verified v0.3.4 base
+      - name: Build v0.3.6 from verified v0.3.5 base
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf base build bridge_work
+          rm -rf base build
           mkdir -p base build
-          gh release download v0.3.4 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          gh release download v0.3.5 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
 
           python3 - <<'PY'
           from pathlib import Path
-          import json, zipfile, shutil
+          import json
 
           app = Path('build/app')
 
           p = app / 'version.json'
           d = json.loads(p.read_text())
-          d['version'] = '0.3.5'
-          d['bridgeVersion'] = '0.3.5'
+          d['version'] = '0.3.6'
           p.write_text(json.dumps(d, indent=2) + '\n')
 
           p = app / 'DragLab_Server.ps1'
-          p.write_text(p.read_text().replace('v0.3.4', 'v0.3.5'))
+          s = p.read_text().replace('v0.3.5', 'v0.3.6')
+
+          old_keep = "\n".join([
+              "        $autoTune.lastDecision = (\"KEEP: {0} improved ET by {1:N3}s ({2:N3} -> {3:N3}).\" -f $c.title,[Math]::Abs($delta),$oldEt,$newEt)",
+              "        $autoTune.currentExperiment = $null",
+              "        Save-AutoTune",
+              "        Start-NextAutoTuneExperiment"
+          ])
+          new_keep = "\n".join([
+              "        $autoTune.lastDecision = (\"KEEP: {0} improved ET by {1:N3}s ({2:N3} -> {3:N3}). Reset/recover the vehicle; the next test will apply automatically once the car is back idle/staged.\" -f $c.title,[Math]::Abs($delta),$oldEt,$newEt)",
+              "        $autoTune.currentExperiment = $null",
+              "        $autoTune.phase = 'WAITING FOR RESET'",
+              "        Save-AutoTune"
+          ])
+          if old_keep not in s:
+              raise RuntimeError('KEEP block not found')
+          s = s.replace(old_keep, new_keep, 1)
+
+          old_revert = "\n".join([
+              "        $bestValue = Get-SetupValue $autoTune.bestSetup $c.name",
+              "        $vals = Convert-SetupToValues $autoTune.bestSetup $null $null",
+              "        $word = if ([Math]::Abs($delta) -le $threshold) { 'neutral/noise-range' } else { 'slower' }",
+              "        $autoTune.lastDecision = (\"REVERT: {0} was {1} ({2:N3} vs best {3:N3}). Restoring {4}.\" -f $c.title,$word,$newEt,$oldEt,$bestValue)",
+              "        $autoTune.currentExperiment = $null",
+              "        Save-AutoTune",
+              "        Send-AutoTuneValues $vals 'revert' $autoTune.lastDecision"
+          ])
+          new_revert = "\n".join([
+              "        $bestValue = Get-SetupValue $autoTune.bestSetup $c.name",
+              "        $word = if ([Math]::Abs($delta) -le $threshold) { 'neutral/noise-range' } else { 'slower' }",
+              "        $autoTune.lastDecision = (\"REVERT: {0} was {1} ({2:N3} vs best {3:N3}). Reset/recover the vehicle; JLRP will restore the best setup automatically before the next test.\" -f $c.title,$word,$newEt,$oldEt)",
+              "        $autoTune.currentExperiment = $null",
+              "        $autoTune.phase = 'WAITING FOR RESET TO REVERT'",
+              "        Save-AutoTune"
+          ])
+          if old_revert not in s:
+              raise RuntimeError('REVERT block not found')
+          s = s.replace(old_revert, new_revert, 1)
+
+          old_house = """function Update-AutoTuneHousekeeping {
+    if ($null -eq $autoTune.pendingApply) { return }
+    try {
+        $sent = [DateTime]::Parse([string]$autoTune.pendingApply.sentAt).ToUniversalTime()
+        $age = ([DateTime]::UtcNow - $sent).TotalSeconds
+        if ($age -gt 20) {
+            $autoTune.active = $false
+            $autoTune.phase = 'ERROR'
+            $autoTune.lastError = 'BeamNG did not verify the tune change within 20 seconds.'
+            $autoTune.lastDecision = 'AUTO-TUNE ERROR: tune change was not verified. Use Restore Best Setup or repair/restart the BeamNG bridge.'
+            $autoTune.pendingApply = $null
+            $autoTune.currentExperiment = $null
+            Save-AutoTune
+        }
+    } catch {}
+}
+"""
+          new_house = """function Update-AutoTuneHousekeeping {
+    # After a pass, never fire the next tune into a car that is still at the
+    # finish line / RESET REQUIRED. Wait for the user to recover/reset first.
+    if ($autoTune.active -and $null -eq $autoTune.pendingApply) {
+        $readyStatus = $state.status -in @('IDLE','ARMED')
+        $stopped = $true
+        try {
+            if ($null -ne $state.telemetry -and $null -ne $state.telemetry.speedMph) {
+                $stopped = [Math]::Abs([double]$state.telemetry.speedMph) -lt 1.0
+            }
+        } catch { $stopped = $true }
+
+        if ($readyStatus -and $stopped) {
+            if ($autoTune.phase -eq 'WAITING FOR RESET') {
+                $autoTune.phase = 'PREPARING NEXT TEST'
+                Save-AutoTune
+                Start-NextAutoTuneExperiment
+                return
+            }
+            if ($autoTune.phase -eq 'WAITING FOR RESET TO REVERT') {
+                $vals = Convert-SetupToValues $autoTune.bestSetup $null $null
+                if ($vals.PSObject.Properties.Count -eq 0) {
+                    $autoTune.active = $false
+                    $autoTune.phase = 'ERROR'
+                    $autoTune.lastError = 'Best setup is empty; cannot revert.'
+                    $autoTune.lastDecision = 'AUTO-TUNE ERROR: best setup could not be restored.'
+                    Save-AutoTune
+                    return
+                }
+                Send-AutoTuneValues $vals 'revert' 'Reset detected. Restoring the best known setup before the next controlled test.'
+                return
+            }
+        }
+    }
+
+    if ($null -eq $autoTune.pendingApply) { return }
+    try {
+        $sent = [DateTime]::Parse([string]$autoTune.pendingApply.sentAt).ToUniversalTime()
+        $age = ([DateTime]::UtcNow - $sent).TotalSeconds
+        if ($age -gt 45) {
+            $autoTune.active = $false
+            $autoTune.phase = 'ERROR'
+            $autoTune.lastError = 'BeamNG did not verify the tune change within 45 seconds.'
+            $autoTune.lastDecision = 'AUTO-TUNE ERROR: tune change was not verified. Use Restore Best Setup or repair/restart the BeamNG bridge.'
+            $autoTune.pendingApply = $null
+            $autoTune.currentExperiment = $null
+            Save-AutoTune
+        }
+    } catch {}
+}
+"""
+          if old_house not in s:
+              raise RuntimeError('housekeeping block not found')
+          s = s.replace(old_house, new_house, 1)
+
+          p.write_text(s)
 
           p = app / 'www' / 'index.html'
-          p.write_text(p.read_text().replace('v0.3.4', 'v0.3.5'))
-
-          bridge_zip = app / 'BeamNG_Mod' / 'draglab_bridge_v0.2.zip'
-          work = Path('bridge_work')
-          if work.exists():
-              shutil.rmtree(work)
-          work.mkdir()
-          with zipfile.ZipFile(bridge_zip, 'r') as z:
-              z.extractall(work)
-
-          info = work / 'info.json'
-          idata = json.loads(info.read_text())
-          idata['version'] = '0.3.5'
-          info.write_text(json.dumps(idata, indent=2) + '\n')
-
-          lua = work / 'lua' / 'vehicle' / 'extensions' / 'auto' / 'draglabTelemetry.lua'
-          s = lua.read_text()
-          for oldver in ('0.3.1','0.3.2','0.3.3','0.3.4'):
-              s = s.replace("payload.version = '" + oldver + "'", "payload.version = '0.3.5'")
-
-          old = "\n".join([
-              "  local mn = tonumber(def.min)",
-              "  local mx = tonumber(def.max)",
-              "  if mn and n < mn - 1e-9 then return nil, 'below minimum' end",
-              "  if mx and n > mx + 1e-9 then return nil, 'above maximum' end",
-              "  return n, nil",
-              ""
-          ])
-          new = "\n".join([
-              "  local mn = tonumber(def.min)",
-              "  local mx = tonumber(def.max)",
-              "  -- Some BeamNG JBeam variables intentionally publish their endpoints in",
-              "  -- descending order (for example toe/caster can report 1.02 -> 0.98).",
-              "  -- Treat min/max as two bounds, not as guaranteed low/high values.",
-              "  local lo = mn",
-              "  local hi = mx",
-              "  if mn and mx and mn > mx then",
-              "    lo = mx",
-              "    hi = mn",
-              "  end",
-              "  if lo and n < lo - 1e-9 then return nil, 'below lower bound' end",
-              "  if hi and n > hi + 1e-9 then return nil, 'above upper bound' end",
-              "  return n, nil",
-              ""
-          ])
-          if old not in s:
-              raise RuntimeError('clampTuneValue bounds block not found')
-          s = s.replace(old, new, 1)
-          lua.write_text(s)
-
-          with zipfile.ZipFile(bridge_zip, 'w', zipfile.ZIP_DEFLATED) as z:
-              for fp in sorted(work.rglob('*')):
-                  if fp.is_file():
-                      z.write(fp, fp.relative_to(work).as_posix())
+          p.write_text(p.read_text().replace('v0.3.5', 'v0.3.6'))
           PY
 
           rm -f release/DragLab_Update.zip
@@ -107,16 +164,17 @@ jobs:
           unzip -t release/DragLab_Update.zip
 
           python3 - <<'PY'
-          import json, zipfile, io
+          import json, zipfile
           z = zipfile.ZipFile('release/DragLab_Update.zip')
           v = json.loads(z.read('app/version.json'))
-          assert v['version'] == '0.3.5'
-          bz = zipfile.ZipFile(io.BytesIO(z.read('app/BeamNG_Mod/draglab_bridge_v0.2.zip')))
-          lua = bz.read('lua/vehicle/extensions/auto/draglabTelemetry.lua').decode()
-          assert 'if mn and mx and mn > mx then' in lua
-          assert 'below lower bound' in lua
-          assert 'above upper bound' in lua
-          print('Verified JLRP v0.3.5 descending-bound validation fix')
+          assert v['version'] == '0.3.6'
+          server = z.read('app/DragLab_Server.ps1').decode()
+          assert "phase = 'WAITING FOR RESET'" in server
+          assert "phase = 'WAITING FOR RESET TO REVERT'" in server
+          assert "Start-NextAutoTuneExperiment" in server
+          assert "if ($age -gt 45)" in server
+          assert "finish line / RESET REQUIRED" in server
+          print('Verified JLRP v0.3.6 reset-gated Auto-Tune continuation')
           PY
 
       - name: Read version

@@ -20,11 +20,8 @@ jobs:
           mkdir -p base build
           gh release download v0.3.5 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-      - name: Exact post-pass and verification code
+      - name: Show state and telemetry processing
         run: |
-          echo '=== 300-370 ==='
-          nl -ba build/app/DragLab_Server.ps1 | sed -n '300,370p'
-          echo '=== verification error matches ==='
-          grep -n -C 8 -F 'tune change was not verified' build/app/DragLab_Server.ps1 || true
-          echo '=== pendingApply matches ==='
-          grep -n -C 4 'pendingApply' build/app/DragLab_Server.ps1 | tail -n 120
+          nl -ba build/app/DragLab_Server.ps1 | sed -n '100,180p'
+          nl -ba build/app/DragLab_Server.ps1 | sed -n '600,710p'
+          nl -ba build/app/DragLab_Server.ps1 | sed -n '760,830p'

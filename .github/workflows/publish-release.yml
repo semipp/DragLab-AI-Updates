@@ -17,7 +17,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build v0.3.1 from verified v0.3.0 base
+      - name: Build v0.3.2 from verified v0.3.1 base
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -25,7 +25,7 @@ jobs:
           set -euo pipefail
           rm -rf base build bridge_work
           mkdir -p base build
-          gh release download v0.3.0 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          gh release download v0.3.1 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
 
           python3 - <<'PY'
@@ -34,28 +34,22 @@ jobs:
 
           app = Path('build/app')
 
-          # App version metadata.
           p = app / 'version.json'
           d = json.loads(p.read_text())
-          d['version'] = '0.3.1'
-          d['bridgeVersion'] = '0.3.1'
+          d['version'] = '0.3.2'
+          d['bridgeVersion'] = '0.3.2'
           p.write_text(json.dumps(d, indent=2) + '\n')
 
-          # Cosmetic app version strings.
           p = app / 'DragLab_Server.ps1'
-          s = p.read_text()
-          s = s.replace('JLRP DragLab v0.3.0', 'JLRP DragLab v0.3.1')
+          s = p.read_text().replace('v0.3.1', 'v0.3.2')
           p.write_text(s)
 
           p = app / 'www' / 'index.html'
-          s = p.read_text()
-          s = s.replace('v0.3.0', 'v0.3.1')
-          s = s.replace('How v0.2.9 records a pass', 'How JLRP records a pass')
-          s = s.replace('DragLab AI v0.2.9 prototype • Official-timeslip sync + fallback ground timer • Local only • UDP 48220 / Dashboard 48221',
-                        'JLRP DragLab v0.3.1 • Official-timeslip sync + closed-loop Auto-Tune • Local only • UDP 48220 / Dashboard 48221')
+          s = p.read_text().replace('v0.3.1', 'v0.3.2')
+          s = s.replace('No tuning variables received yet. Connect BeamNG and spawn a vehicle.',
+                        'Waiting for full tuning-variable payload from BeamNG...')
           p.write_text(s)
 
-          # Patch the BeamNG bridge so setup scanning keeps retrying after spawn.
           bridge_zip = app / 'BeamNG_Mod' / 'draglab_bridge_v0.2.zip'
           work = Path('bridge_work')
           if work.exists():
@@ -66,30 +60,31 @@ jobs:
 
           info = work / 'info.json'
           idata = json.loads(info.read_text())
-          idata['version'] = '0.3.1'
+          idata['version'] = '0.3.2'
           info.write_text(json.dumps(idata, indent=2) + '\n')
 
           lua = work / 'lua' / 'vehicle' / 'extensions' / 'auto' / 'draglabTelemetry.lua'
           s = lua.read_text()
-          s = s.replace('JLRP DragLab v0.3.0', 'JLRP DragLab v0.3.1')
-          s = s.replace("payload.version = '0.3.0'", "payload.version = '0.3.1'")
+          s = s.replace('v0.3.1', 'v0.3.2')
 
-          old = "local sendTimer = 0\nlocal sampleTimer = 0"
-          new = "local sendTimer = 0\nlocal helloTimer = 0\nlocal HELLO_INTERVAL = 1.0\nlocal sampleTimer = 0"
-          if 'local HELLO_INTERVAL = 1.0' not in s:
-              if old not in s:
-                  raise RuntimeError('sendTimer insertion point not found')
-              s = s.replace(old, new, 1)
-
-          marker = "local function updateGFX(dt)\n  receiveDesktopCommands()\n"
-          block = """\n  -- v0.3.1: JBeam tuning variables can populate after the extension loads.\n  -- Retry the lightweight hello once per second. sendHello only includes the\n  -- full setup when its hash changes, so this is cheap after the table settles.\n  helloTimer = helloTimer + dt\n  if helloTimer >= HELLO_INTERVAL then\n    helloTimer = 0\n    sendHello(false)\n  end\n"""
-          if 'helloTimer = helloTimer + dt' not in s:
-              if marker not in s:
-                  raise RuntimeError('updateGFX insertion point not found')
-              s = s.replace(marker, marker + block, 1)
-
-          s = s.replace('JLRP DragLab v0.3.0 telemetry bridge loaded',
-                        'JLRP DragLab v0.3.1 telemetry bridge loaded')
+          old = """  helloTimer = helloTimer + dt
+  if helloTimer >= HELLO_INTERVAL then
+    helloTimer = 0
+    sendHello(false)
+  end
+"""
+          new = """  helloTimer = helloTimer + dt
+  if helloTimer >= HELLO_INTERVAL then
+    helloTimer = 0
+    -- v0.3.2: force the complete setup payload each retry. The top-level count
+    -- can be correct before the desktop has the actual table, so hash-only
+    -- retries can leave Setup Scanner empty forever.
+    sendHello(true)
+  end
+"""
+          if old not in s:
+              raise RuntimeError('v0.3.1 hello retry block not found')
+          s = s.replace(old, new, 1)
           lua.write_text(s)
 
           with zipfile.ZipFile(bridge_zip, 'w', zipfile.ZIP_DEFLATED) as z:
@@ -103,16 +98,17 @@ jobs:
 
           test "$(stat -c%s release/DragLab_Update.zip)" -gt 30000
           unzip -t release/DragLab_Update.zip
+
           python3 - <<'PY'
           import json, zipfile, io
           z = zipfile.ZipFile('release/DragLab_Update.zip')
           v = json.loads(z.read('app/version.json'))
-          assert v['version'] == '0.3.1'
+          assert v['version'] == '0.3.2'
           bz = zipfile.ZipFile(io.BytesIO(z.read('app/BeamNG_Mod/draglab_bridge_v0.2.zip')))
           lua = bz.read('lua/vehicle/extensions/auto/draglabTelemetry.lua').decode()
-          assert 'HELLO_INTERVAL = 1.0' in lua
-          assert 'helloTimer = helloTimer + dt' in lua
-          print('Verified JLRP v0.3.1 setup-rescan bridge')
+          assert 'sendHello(true)' in lua
+          assert 'force the complete setup payload' in lua
+          print('Verified JLRP v0.3.2 full setup payload retry')
           PY
 
       - name: Read version

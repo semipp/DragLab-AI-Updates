@@ -1,11 +1,9 @@
-JLRP DragLab v0.3.1 - Setup Scanner Retry Fix
+JLRP DragLab v0.3.2 - Full Setup Payload Sync Fix
 
-- Fixes the R35 setup scanner getting stuck at 0-2 generic variables after startup.
-- BeamNG bridge now resends a lightweight setup hello every second.
-- As soon as the full JBeam variable table becomes available, JLRP receives it automatically without requiring a vehicle reset.
-- Auto-Tune remains blocked until usable whitelisted tuning variables are present.
-- Keeps BeamNG official 1/4-mile ET as the Auto-Tune KEEP/REVERT decision source.
-- Wheel-slip telemetry remains excluded from tuning decisions.
-- Updates dashboard/version branding to v0.3.1.
-
-Target: restore the full R35 tuning-variable set before starting Auto-Tune.
+- Fixes the dashboard showing "Tunable variables: 39" while the Setup Scanner table remains empty.
+- BeamNG bridge now forces the complete setup payload on retry instead of sending only a hash/status hello.
+- Keeps the 1-second retry loop until the desktop receives the full JBeam tuning table.
+- Setup Scanner placeholder now correctly says it is waiting for the full payload.
+- Auto-Tune remains blocked until actual whitelisted variables are loaded.
+- Official BeamNG timing remains the KEEP/REVERT decision source.
+- Wheel-slip telemetry remains excluded from Auto-Tune decisions.

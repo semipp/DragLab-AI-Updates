@@ -5,7 +5,7 @@ on:
     paths:
       - 'release/version.txt'
       - 'release/notes.md'
-      - 'release/build_v037.py'
+      - 'release/build_v038.py'
       - '.github/workflows/publish-release.yml'
 
 permissions:
@@ -18,17 +18,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build v0.3.7 from verified v0.3.6 base
+      - name: Build v0.3.8 from verified v0.3.7 base
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf base build bridge_work_v037
+          rm -rf base build bridge_work_v038 verify_app
           mkdir -p base build
-          gh release download v0.3.6 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          gh release download v0.3.7 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-          python3 release/build_v037.py build
+          python3 release/build_v038.py build
 
           rm -f release/DragLab_Update.zip
           (cd build && zip -qr ../release/DragLab_Update.zip app)
@@ -36,41 +36,46 @@ jobs:
           test "$(stat -c%s release/DragLab_Update.zip)" -gt 30000
           unzip -t release/DragLab_Update.zip
 
-      - name: Verify v0.3.7 package
+      - name: Verify v0.3.8 package
         shell: bash
         run: |
           python3 - <<'PY'
           import json, zipfile, io
           z = zipfile.ZipFile('release/DragLab_Update.zip')
           v = json.loads(z.read('app/version.json'))
-          assert v['version'] == '0.3.7'
-          assert v['bridgeVersion'] == '0.3.7'
-
-          names = set(z.namelist())
-          assert 'app/Sync_JLRP_RunData.ps1' in names
-          assert 'app/Setup_JLRP_Run_Sync.ps1' in names
-          assert 'app/Setup_JLRP_Run_Sync.bat' in names
+          assert v['version'] == '0.3.8'
+          assert v['bridgeVersion'] == '0.3.8'
 
           server = z.read('app/DragLab_Server.ps1').decode()
-          assert "repo = 'semipp/DragLab-AI'" in server
-          assert "path = 'run-data/latest.json'" in server
-          assert "Request-RunSync 'official-pass'" in server
-          assert "runSync = (Get-RunSyncStatus)" in server
-          assert "officialThreeThirty" in server
-          assert "officialThousand" in server
-          assert "officialReaction" in server
+          for needle in [
+              "stage = 1",
+              "Get-AutoTuneCandidates($setup, [int]$stage = 1)",
+              "$tirepressure_F",
+              "$arb_spring_F",
+              "$spring_F",
+              "$finaldrive_F",
+              "$gear_1",
+              "$gear_2",
+              "$gear_3",
+              "Stage 2 chassis + gearing sweep is complete",
+              "stageName=$(if([int]$autoTune.stage -eq 2)",
+          ]:
+              assert needle in server, needle
+
+          setup = z.read('app/Setup_JLRP_Run_Sync.ps1').decode()
+          sync = z.read('app/Sync_JLRP_RunData.ps1').decode()
+          for txt in (setup, sync):
+              assert "$authExit = $LASTEXITCODE" in txt
+              assert "$ErrorActionPreference = 'SilentlyContinue'" in txt
 
           html = z.read('app/www/index.html').decode()
-          assert 'id="syncSetupBtn"' in html
-          assert 'Private Run Sync' in html
-          assert 'v0.3.7' in html
+          assert 'v0.3.8' in html
+          assert 'Stage 2 continues into front chassis and gearing' in html
 
           bz = zipfile.ZipFile(io.BytesIO(z.read('app/BeamNG_Mod/draglab_bridge_v0.2.zip')))
-          ge = bz.read('lua/ge/extensions/draglabOfficialSync.lua').decode()
-          assert "threeThirty = slip.threeThirty" in ge
-          assert "thousand = slip.thousand" in ge
-          assert "reaction = slip.reaction" in ge
-          print('Verified JLRP v0.3.7 private run sync + full official split capture')
+          info = json.loads(bz.read('info.json'))
+          assert info['version'] == '0.3.8'
+          print('Verified JLRP v0.3.8 Stage 2 Auto-Tune + Run Sync auth fix')
           PY
 
           mkdir -p verify_app
@@ -92,4 +97,6 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           TAG="v${VERSION}"
           gh release delete "$TAG" --yes --cleanup-tag || true
-          gh release create "$TAG" release/DragLab_Update.zip             --title "JLRP DragLab $TAG"             --notes-file release/notes.md
+          gh release create "$TAG" release/DragLab_Update.zip \
+            --title "JLRP DragLab $TAG" \
+            --notes-file release/notes.md

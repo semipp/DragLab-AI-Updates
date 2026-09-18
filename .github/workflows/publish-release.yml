@@ -3,7 +3,6 @@ name: Publish DragLab Update
 on:
   push:
     paths:
-      - 'release/DragLab_Update.zip'
       - 'release/version.txt'
       - 'release/notes.md'
       - '.github/workflows/publish-release.yml'
@@ -18,12 +17,103 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Verify update ZIP
+      - name: Build v0.3.1 from verified v0.3.0 base
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
-          test "$(stat -c%s release/DragLab_Update.zip)" -eq 38816
-          echo "ac0e6e51caf61fb86610f51bf00143d453c04d7e5a042d947d453511e263753b  release/DragLab_Update.zip" | sha256sum -c -
+          set -euo pipefail
+          rm -rf base build bridge_work
+          mkdir -p base build
+          gh release download v0.3.0 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          unzip -q base/DragLab_Update.zip -d build
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import json, zipfile, shutil
+
+          app = Path('build/app')
+
+          # App version metadata.
+          p = app / 'version.json'
+          d = json.loads(p.read_text())
+          d['version'] = '0.3.1'
+          d['bridgeVersion'] = '0.3.1'
+          p.write_text(json.dumps(d, indent=2) + '\n')
+
+          # Cosmetic app version strings.
+          p = app / 'DragLab_Server.ps1'
+          s = p.read_text()
+          s = s.replace('JLRP DragLab v0.3.0', 'JLRP DragLab v0.3.1')
+          p.write_text(s)
+
+          p = app / 'www' / 'index.html'
+          s = p.read_text()
+          s = s.replace('v0.3.0', 'v0.3.1')
+          s = s.replace('How v0.2.9 records a pass', 'How JLRP records a pass')
+          s = s.replace('DragLab AI v0.2.9 prototype • Official-timeslip sync + fallback ground timer • Local only • UDP 48220 / Dashboard 48221',
+                        'JLRP DragLab v0.3.1 • Official-timeslip sync + closed-loop Auto-Tune • Local only • UDP 48220 / Dashboard 48221')
+          p.write_text(s)
+
+          # Patch the BeamNG bridge so setup scanning keeps retrying after spawn.
+          bridge_zip = app / 'BeamNG_Mod' / 'draglab_bridge_v0.2.zip'
+          work = Path('bridge_work')
+          if work.exists():
+              shutil.rmtree(work)
+          work.mkdir()
+          with zipfile.ZipFile(bridge_zip, 'r') as z:
+              z.extractall(work)
+
+          info = work / 'info.json'
+          idata = json.loads(info.read_text())
+          idata['version'] = '0.3.1'
+          info.write_text(json.dumps(idata, indent=2) + '\n')
+
+          lua = work / 'lua' / 'vehicle' / 'extensions' / 'auto' / 'draglabTelemetry.lua'
+          s = lua.read_text()
+          s = s.replace('JLRP DragLab v0.3.0', 'JLRP DragLab v0.3.1')
+          s = s.replace("payload.version = '0.3.0'", "payload.version = '0.3.1'")
+
+          old = "local sendTimer = 0\nlocal sampleTimer = 0"
+          new = "local sendTimer = 0\nlocal helloTimer = 0\nlocal HELLO_INTERVAL = 1.0\nlocal sampleTimer = 0"
+          if 'local HELLO_INTERVAL = 1.0' not in s:
+              if old not in s:
+                  raise RuntimeError('sendTimer insertion point not found')
+              s = s.replace(old, new, 1)
+
+          marker = "local function updateGFX(dt)\n  receiveDesktopCommands()\n"
+          block = """\n  -- v0.3.1: JBeam tuning variables can populate after the extension loads.\n  -- Retry the lightweight hello once per second. sendHello only includes the\n  -- full setup when its hash changes, so this is cheap after the table settles.\n  helloTimer = helloTimer + dt\n  if helloTimer >= HELLO_INTERVAL then\n    helloTimer = 0\n    sendHello(false)\n  end\n"""
+          if 'helloTimer = helloTimer + dt' not in s:
+              if marker not in s:
+                  raise RuntimeError('updateGFX insertion point not found')
+              s = s.replace(marker, marker + block, 1)
+
+          s = s.replace('JLRP DragLab v0.3.0 telemetry bridge loaded',
+                        'JLRP DragLab v0.3.1 telemetry bridge loaded')
+          lua.write_text(s)
+
+          with zipfile.ZipFile(bridge_zip, 'w', zipfile.ZIP_DEFLATED) as z:
+              for f in sorted(work.rglob('*')):
+                  if f.is_file():
+                      z.write(f, f.relative_to(work).as_posix())
+          PY
+
+          rm -f release/DragLab_Update.zip
+          (cd build && zip -qr ../release/DragLab_Update.zip app)
+
+          test "$(stat -c%s release/DragLab_Update.zip)" -gt 30000
           unzip -t release/DragLab_Update.zip
+          python3 - <<'PY'
+          import json, zipfile, io
+          z = zipfile.ZipFile('release/DragLab_Update.zip')
+          v = json.loads(z.read('app/version.json'))
+          assert v['version'] == '0.3.1'
+          bz = zipfile.ZipFile(io.BytesIO(z.read('app/BeamNG_Mod/draglab_bridge_v0.2.zip')))
+          lua = bz.read('lua/vehicle/extensions/auto/draglabTelemetry.lua').decode()
+          assert 'HELLO_INTERVAL = 1.0' in lua
+          assert 'helloTimer = helloTimer + dt' in lua
+          print('Verified JLRP v0.3.1 setup-rescan bridge')
+          PY
 
       - name: Read version
         id: version
@@ -38,4 +128,6 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           TAG="v${VERSION}"
           gh release delete "$TAG" --yes --cleanup-tag || true
-          gh release create "$TAG" release/DragLab_Update.zip             --title "JLRP DragLab $TAG"             --notes-file release/notes.md
+          gh release create "$TAG" release/DragLab_Update.zip \
+            --title "JLRP DragLab $TAG" \
+            --notes-file release/notes.md

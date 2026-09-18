@@ -17,62 +17,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build v0.3.2 from verified v0.3.1 base
+      - name: Build v0.3.3 from verified v0.3.2 base
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf base build bridge_work
+          rm -rf base build
           mkdir -p base build
-          gh release download v0.3.1 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          gh release download v0.3.2 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
 
           python3 - <<'PY'
           from pathlib import Path
-          import json, zipfile, shutil
+          import json
 
           app = Path('build/app')
 
           p = app / 'version.json'
           d = json.loads(p.read_text())
-          d['version'] = '0.3.2'
-          d['bridgeVersion'] = '0.3.2'
+          d['version'] = '0.3.3'
           p.write_text(json.dumps(d, indent=2) + '\n')
 
           p = app / 'DragLab_Server.ps1'
-          s = p.read_text().replace('v0.3.1', 'v0.3.2')
+          s = p.read_text()
+          s = s.replace('v0.3.2', 'v0.3.3')
+          old = "    $payload.source = 'JLRPDesktop'\n    $payload.version = '0.3.0'"
+          new = "    Add-OrSetProperty $payload 'source' 'JLRPDesktop'\n    Add-OrSetProperty $payload 'version' '0.3.3'"
+          if old not in s:
+              raise RuntimeError('unsafe Send-BeamCommand property assignment not found')
+          s = s.replace(old, new, 1)
           p.write_text(s)
 
           p = app / 'www' / 'index.html'
-          s = p.read_text().replace('v0.3.1', 'v0.3.2')
-          s = s.replace('No tuning variables received yet. Connect BeamNG and spawn a vehicle.', 'Waiting for full tuning-variable payload from BeamNG...')
+          s = p.read_text().replace('v0.3.2', 'v0.3.3')
           p.write_text(s)
-
-          bridge_zip = app / 'BeamNG_Mod' / 'draglab_bridge_v0.2.zip'
-          work = Path('bridge_work')
-          if work.exists():
-              shutil.rmtree(work)
-          work.mkdir()
-          with zipfile.ZipFile(bridge_zip, 'r') as z:
-              z.extractall(work)
-
-          info = work / 'info.json'
-          idata = json.loads(info.read_text())
-          idata['version'] = '0.3.2'
-          info.write_text(json.dumps(idata, indent=2) + '\n')
-
-          lua = work / 'lua' / 'vehicle' / 'extensions' / 'auto' / 'draglabTelemetry.lua'
-          s = lua.read_text().replace('v0.3.1', 'v0.3.2')
-          if 'sendHello(false)' not in s:
-              raise RuntimeError('v0.3.1 retry call not found')
-          s = s.replace('sendHello(false)', 'sendHello(true)', 1)
-          lua.write_text(s)
-
-          with zipfile.ZipFile(bridge_zip, 'w', zipfile.ZIP_DEFLATED) as z:
-              for f in sorted(work.rglob('*')):
-                  if f.is_file():
-                      z.write(f, f.relative_to(work).as_posix())
           PY
 
           rm -f release/DragLab_Update.zip
@@ -82,14 +61,15 @@ jobs:
           unzip -t release/DragLab_Update.zip
 
           python3 - <<'PY'
-          import json, zipfile, io
+          import json, zipfile
           z = zipfile.ZipFile('release/DragLab_Update.zip')
           v = json.loads(z.read('app/version.json'))
-          assert v['version'] == '0.3.2'
-          bz = zipfile.ZipFile(io.BytesIO(z.read('app/BeamNG_Mod/draglab_bridge_v0.2.zip')))
-          lua = bz.read('lua/vehicle/extensions/auto/draglabTelemetry.lua').decode()
-          assert 'sendHello(true)' in lua
-          print('Verified JLRP v0.3.2 full setup payload retry')
+          assert v['version'] == '0.3.3'
+          server = z.read('app/DragLab_Server.ps1').decode()
+          assert "Add-OrSetProperty $payload 'source' 'JLRPDesktop'" in server
+          assert "Add-OrSetProperty $payload 'version' '0.3.3'" in server
+          assert "$payload.source = 'JLRPDesktop'" not in server
+          print('Verified JLRP v0.3.3 Auto-Tune command payload fix')
           PY
 
       - name: Read version

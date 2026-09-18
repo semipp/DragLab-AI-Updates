@@ -61,41 +61,43 @@ jobs:
 
           lua = work / 'lua' / 'vehicle' / 'extensions' / 'auto' / 'draglabTelemetry.lua'
           s = lua.read_text()
-          s = s.replace("payload.version = '0.3.1'", "payload.version = '0.3.5'")
-          s = s.replace("payload.version = '0.3.2'", "payload.version = '0.3.5'")
-          s = s.replace("payload.version = '0.3.3'", "payload.version = '0.3.5'")
-          s = s.replace("payload.version = '0.3.4'", "payload.version = '0.3.5'")
+          for oldver in ('0.3.1','0.3.2','0.3.3','0.3.4'):
+              s = s.replace("payload.version = '" + oldver + "'", "payload.version = '0.3.5'")
 
-          old = """  local mn = tonumber(def.min)
-  local mx = tonumber(def.max)
-  if mn and n < mn - 1e-9 then return nil, 'below minimum' end
-  if mx and n > mx + 1e-9 then return nil, 'above maximum' end
-  return n, nil
-"""
-          new = """  local mn = tonumber(def.min)
-  local mx = tonumber(def.max)
-  -- Some BeamNG JBeam variables intentionally publish their endpoints in
-  -- descending order (for example toe/caster can report 1.02 -> 0.98).
-  -- Treat min/max as two bounds, not as guaranteed low/high values.
-  local lo = mn
-  local hi = mx
-  if mn and mx and mn > mx then
-    lo = mx
-    hi = mn
-  end
-  if lo and n < lo - 1e-9 then return nil, 'below lower bound' end
-  if hi and n > hi + 1e-9 then return nil, 'above upper bound' end
-  return n, nil
-"""
+          old = "\n".join([
+              "  local mn = tonumber(def.min)",
+              "  local mx = tonumber(def.max)",
+              "  if mn and n < mn - 1e-9 then return nil, 'below minimum' end",
+              "  if mx and n > mx + 1e-9 then return nil, 'above maximum' end",
+              "  return n, nil",
+              ""
+          ])
+          new = "\n".join([
+              "  local mn = tonumber(def.min)",
+              "  local mx = tonumber(def.max)",
+              "  -- Some BeamNG JBeam variables intentionally publish their endpoints in",
+              "  -- descending order (for example toe/caster can report 1.02 -> 0.98).",
+              "  -- Treat min/max as two bounds, not as guaranteed low/high values.",
+              "  local lo = mn",
+              "  local hi = mx",
+              "  if mn and mx and mn > mx then",
+              "    lo = mx",
+              "    hi = mn",
+              "  end",
+              "  if lo and n < lo - 1e-9 then return nil, 'below lower bound' end",
+              "  if hi and n > hi + 1e-9 then return nil, 'above upper bound' end",
+              "  return n, nil",
+              ""
+          ])
           if old not in s:
               raise RuntimeError('clampTuneValue bounds block not found')
           s = s.replace(old, new, 1)
           lua.write_text(s)
 
           with zipfile.ZipFile(bridge_zip, 'w', zipfile.ZIP_DEFLATED) as z:
-              for f in sorted(work.rglob('*')):
-                  if f.is_file():
-                      z.write(f, f.relative_to(work).as_posix())
+              for fp in sorted(work.rglob('*')):
+                  if fp.is_file():
+                      z.write(fp, fp.relative_to(work).as_posix())
           PY
 
           rm -f release/DragLab_Update.zip
@@ -112,8 +114,8 @@ jobs:
           bz = zipfile.ZipFile(io.BytesIO(z.read('app/BeamNG_Mod/draglab_bridge_v0.2.zip')))
           lua = bz.read('lua/vehicle/extensions/auto/draglabTelemetry.lua').decode()
           assert 'if mn and mx and mn > mx then' in lua
-          assert "below lower bound" in lua
-          assert "above upper bound" in lua
+          assert 'below lower bound' in lua
+          assert 'above upper bound' in lua
           print('Verified JLRP v0.3.5 descending-bound validation fix')
           PY
 

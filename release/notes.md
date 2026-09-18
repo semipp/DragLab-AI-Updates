@@ -1,8 +1,10 @@
-JLRP DragLab v0.3.3 - Auto-Tune Start Fix
+JLRP DragLab v0.3.4 - Safe One-Variable Auto-Tune Fix
 
-- Fixes START AUTO-TUNE failing with: property 'source' cannot be found on this object.
-- BeamNG command payload metadata is now added safely to PowerShell custom objects.
-- Keeps the working v0.3.2 full setup-payload sync and 39-variable scanner.
-- Auto-Tune still changes one whitelisted variable at a time.
-- BeamNG OFFICIAL quarter-mile ET remains the KEEP/REVERT decision source.
+- IMPORTANT: fixes BeamNG resetting omitted JBeam variables to defaults when Auto-Tune changed only one variable.
+- Every Auto-Tune apply now resends the complete captured setup and overrides exactly one target variable.
+- Revert and Restore Best Setup now restore the complete captured setup, not just managed candidate values.
+- Auto-Tune will not enter WAITING FOR OFFICIAL PASS until the entire expected setup is verified after the reload.
+- Baseline selection now uses the fastest BeamNG OFFICIAL pass matching the current vehicle + exact setup hash.
+- This means the R35's stored 6.224 PB is used when its setup matches, instead of simply using the latest 6.247 pass.
+- Keeps the v0.3.2/0.3.3 39-variable scanner and command-channel fixes.
 - Wheel-slip telemetry remains excluded from tuning decisions.

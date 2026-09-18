@@ -9,5 +9,6 @@ JLRP DragLab v0.3.0 - Auto-Tune MVP
 - Ignores the current unreliable wheel-slip channel for tuning decisions.
 - Rejects junk setup variables such as parked wheel radius/body offsets.
 - Adds command rejection handling and a 20-second apply/verification timeout.
+- Release ZIP is rebuilt and checksum-verified automatically before publishing.
 
 First test target: Nissan GTR R35 at West Coast, USA Sportsman Tree.

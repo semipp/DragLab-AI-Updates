@@ -1,4 +1,4 @@
-name: Inspect v0.3.6 Dashboard Hooks
+name: Inspect v0.3.6 Sync Patch Points
 
 on:
   push:
@@ -20,9 +20,13 @@ jobs:
           mkdir -p base build
           gh release download v0.3.6 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-      - name: Show dashboard top controls and server HTTP routes
+      - name: Show patch points
         run: |
-          echo '=== HTML controls ==='
-          grep -n -C 6 -Ei 'Diagnostic Test Pass|Export Runs|Clear History|autoTune|fetch\(|api/' build/app/www/index.html | head -n 420
-          echo '=== SERVER routes ==='
-          grep -n -C 8 -Ei 'api/|RawUrl|HttpListener|AbsolutePath|GetContext|POST|diagnostic|export|clear' build/app/DragLab_Server.ps1 | head -n 520
+          echo '=== top ==='
+          nl -ba build/app/DragLab_Server.ps1 | sed -n '1,95p'
+          echo '=== autotune save ==='
+          nl -ba build/app/DragLab_Server.ps1 | sed -n '145,230p'
+          echo '=== official apply ==='
+          nl -ba build/app/DragLab_Server.ps1 | sed -n '535,620p'
+          echo '=== status ==='
+          nl -ba build/app/DragLab_Server.ps1 | sed -n '820,930p'

@@ -1,4 +1,4 @@
-name: Inspect v0.3.5 Status
+name: Inspect v0.3.6 Run Capture
 
 on:
   push:
@@ -13,14 +13,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download v0.3.5
+      - name: Download v0.3.6
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p base build
-          gh release download v0.3.5 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          mkdir -p base build bridge
+          gh release download v0.3.6 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-      - name: Show status message handling
+          unzip -q build/app/BeamNG_Mod/draglab_bridge_v0.2.zip -d bridge
+      - name: Show run-save and official timing code
         run: |
-          nl -ba build/app/DragLab_Server.ps1 | sed -n '710,780p'
-          grep -n -C 3 '\$state.status' build/app/DragLab_Server.ps1
+          echo '=== SERVER run save / official matches ==='
+          grep -n -C 5 -Ei 'official|timeslip|330|1000|Save-Runs|runs.Add|setupHash|timingSource|eighth|sixty' build/app/DragLab_Server.ps1 | head -n 420
+          echo '=== BRIDGE official matches ==='
+          grep -n -C 5 -Ei 'official|timeslip|330|1000|eighth|sixty|quarter|drag' bridge/lua/vehicle/extensions/auto/draglabTelemetry.lua | head -n 420

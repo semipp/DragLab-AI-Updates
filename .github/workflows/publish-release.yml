@@ -3,8 +3,7 @@ name: Publish DragLab Update
 on:
   push:
     paths:
-      - 'package_b64/**'
-      - 'pack2/**'
+      - 'release/DragLab_Update.zip'
       - 'release/version.txt'
       - 'release/notes.md'
       - '.github/workflows/publish-release.yml'
@@ -19,12 +18,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Rebuild and verify update ZIP
+      - name: Verify update ZIP
         shell: bash
         run: |
-          cat             pack2/p00a.txt             pack2/p00b1a1.txt             pack2/p00b1a2x1.txt             pack2/p00b1a2x2.txt             pack2/p00b1b.txt             pack2/p00b2.txt             package_b64/part01.txt             package_b64/part02.txt             pack2/p03a.txt             pack2/p03b.txt             package_b64/part04.txt             package_b64/part05.txt             package_b64/part06.txt             | tr -d '\r\n' | base64 --decode > release/DragLab_Update.zip
-          test "$(stat -c%s release/DragLab_Update.zip)" -eq 37165
-          echo "9b33a6e96eb0faf7caf9c2b578ec147503bfaa9c42e8be75bccc22c3e82c86a1  release/DragLab_Update.zip" | sha256sum -c -
+          test "$(stat -c%s release/DragLab_Update.zip)" -eq 38816
+          echo "ac0e6e51caf61fb86610f51bf00143d453c04d7e5a042d947d453511e263753b  release/DragLab_Update.zip" | sha256sum -c -
           unzip -t release/DragLab_Update.zip
 
       - name: Read version
@@ -40,6 +38,4 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           TAG="v${VERSION}"
           gh release delete "$TAG" --yes --cleanup-tag || true
-          gh release create "$TAG" release/DragLab_Update.zip \
-            --title "JLRP DragLab $TAG" \
-            --notes-file release/notes.md
+          gh release create "$TAG" release/DragLab_Update.zip             --title "JLRP DragLab $TAG"             --notes-file release/notes.md

@@ -1,14 +1,11 @@
-JLRP DragLab v0.3.0 - Auto-Tune MVP
+JLRP DragLab v0.3.1 - Setup Scanner Retry Fix
 
-- Adds START AUTO-TUNE, STOP and RESTORE BEST SETUP controls.
-- Uses BeamNG official quarter-mile ET as the decision source.
-- Changes one whitelisted tuning variable at a time.
-- Starts with rear tyre pressure, then selected safe suspension settings.
-- Faster official ET = KEEP; slower/noise-range = REVERT.
-- Preserves the best known setup and Auto-Tune history locally.
-- Ignores the current unreliable wheel-slip channel for tuning decisions.
-- Rejects junk setup variables such as parked wheel radius/body offsets.
-- Adds command rejection handling and a 20-second apply/verification timeout.
-- Release ZIP is rebuilt and checksum-verified automatically before publishing.
+- Fixes the R35 setup scanner getting stuck at 0-2 generic variables after startup.
+- BeamNG bridge now resends a lightweight setup hello every second.
+- As soon as the full JBeam variable table becomes available, JLRP receives it automatically without requiring a vehicle reset.
+- Auto-Tune remains blocked until usable whitelisted tuning variables are present.
+- Keeps BeamNG official 1/4-mile ET as the Auto-Tune KEEP/REVERT decision source.
+- Wheel-slip telemetry remains excluded from tuning decisions.
+- Updates dashboard/version branding to v0.3.1.
 
-First test target: Nissan GTR R35 at West Coast, USA Sportsman Tree.
+Target: restore the full R35 tuning-variable set before starting Auto-Tune.

@@ -17,120 +17,85 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build v0.3.4 from verified v0.3.3 base
+      - name: Build v0.3.5 from verified v0.3.4 base
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf base build
+          rm -rf base build bridge_work
           mkdir -p base build
-          gh release download v0.3.3 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          gh release download v0.3.4 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
 
           python3 - <<'PY'
           from pathlib import Path
-          import json, re
+          import json, zipfile, shutil
 
           app = Path('build/app')
 
           p = app / 'version.json'
           d = json.loads(p.read_text())
-          d['version'] = '0.3.4'
+          d['version'] = '0.3.5'
+          d['bridgeVersion'] = '0.3.5'
           p.write_text(json.dumps(d, indent=2) + '\n')
 
           p = app / 'DragLab_Server.ps1'
-          s = p.read_text().replace('v0.3.3', 'v0.3.4')
-
-          helper = "\n".join([
-              "function Convert-SetupToValues($setup, [string]$overrideName, $overrideValue) {",
-              "    $values = [pscustomobject]@{}",
-              "    foreach ($v in @($setup)) {",
-              "        $name = [string]$v.name",
-              "        if (-not $name) { continue }",
-              "        try {",
-              "            $n = [double]$v.value",
-              "            $values | Add-Member -NotePropertyName $name -NotePropertyValue $n -Force",
-              "        } catch {}",
-              "    }",
-              "    if ($overrideName) {",
-              "        $values | Add-Member -NotePropertyName $overrideName -NotePropertyValue ([double]$overrideValue) -Force",
-              "    }",
-              "    return $values",
-              "}",
-              ""
-          ]) + "\n"
-
-          needle = 'function Get-AutoTuneCandidates($setup) {'
-          if 'function Convert-SetupToValues(' not in s:
-              if needle not in s:
-                  raise RuntimeError('candidate helper insertion point not found')
-              s = s.replace(needle, helper + needle, 1)
-
-          pat = re.compile(r"\$vals = \[pscustomobject\]@\{\}\r?\n\s*\$vals \| Add-Member -NotePropertyName \$c\.name -NotePropertyValue \$target")
-          s, n = pat.subn(r"$vals = Convert-SetupToValues $autoTune.bestSetup $c.name ([double]$target)", s, count=1)
-          if n != 1:
-              raise RuntimeError(f'experiment full-setup patch count={n}')
-
-          pat = re.compile(r"\$vals = \[pscustomobject\]@\{\}\r?\n\s*\$vals \| Add-Member -NotePropertyName \$c\.name -NotePropertyValue \(\[double\]\$bestValue\)")
-          s, n = pat.subn(r"$vals = Convert-SetupToValues $autoTune.bestSetup $null $null", s, count=1)
-          if n != 1:
-              raise RuntimeError(f'revert full-setup patch count={n}')
-
-          old_restore = "\n".join([
-              "    $values = [pscustomobject]@{}",
-              "    foreach ($c in @($autoTune.candidateStates)) {",
-              "        $v = Get-SetupValue $autoTune.bestSetup $c.name",
-              "        if ($null -ne $v) { $values | Add-Member -NotePropertyName $c.name -NotePropertyValue ([double]$v) -Force }",
-              "    }",
-              "    if ($values.PSObject.Properties.Count -eq 0) { throw 'No managed Auto-Tune values are available to restore.' }",
-              ""
-          ])
-          new_restore = "\n".join([
-              "    $values = Convert-SetupToValues $autoTune.bestSetup $null $null",
-              "    if ($values.PSObject.Properties.Count -eq 0) { throw 'No captured setup values are available to restore.' }",
-              ""
-          ])
-          if old_restore not in s:
-              raise RuntimeError('restore block not found')
-          s = s.replace(old_restore, new_restore, 1)
-
-          old_base = "\n".join([
-              "    $baseline = $null",
-              "    for ($i=$runs.Count-1; $i -ge 0; $i--) {",
-              "        $r=$runs[$i]",
-              "        if ([string]$r.timingSource -eq 'beamng-official' -and $null -ne $r.setup -and @($r.setup).Count -gt 0) { $baseline=$r; break }",
-              "    }",
-              ""
-          ])
-          new_base = "\n".join([
-              "    $baseline = $null",
-              "    $eligible = New-Object System.Collections.ArrayList",
-              "    foreach ($r in @($runs)) {",
-              "        if ([string]$r.timingSource -ne 'beamng-official') { continue }",
-              "        if ($null -eq $r.setup -or @($r.setup).Count -eq 0) { continue }",
-              "        if ($state.vehicleKey -and $r.vehicleKey -and ([string]$state.vehicleKey -ne [string]$r.vehicleKey)) { continue }",
-              "        if ($state.setupHash -and $r.setupHash -and ([string]$state.setupHash -ne [string]$r.setupHash)) { continue }",
-              "        [void]$eligible.Add($r)",
-              "    }",
-              "    if ($eligible.Count -gt 0) {",
-              "        $baseline = @($eligible | Sort-Object { [double]$_.et })[0]",
-              "    }",
-              ""
-          ])
-          if old_base not in s:
-              raise RuntimeError('baseline selection block not found')
-          s = s.replace(old_base, new_base, 1)
-
-          s = s.replace(
-              'Tune applied and verified. Make a full quarter-mile pass; only BeamNG official timing will be judged.',
-              'Tune applied and FULL SETUP verified. Make a full quarter-mile pass; only BeamNG official timing will be judged.'
-          )
-
-          p.write_text(s)
+          p.write_text(p.read_text().replace('v0.3.4', 'v0.3.5'))
 
           p = app / 'www' / 'index.html'
-          p.write_text(p.read_text().replace('v0.3.3', 'v0.3.4'))
+          p.write_text(p.read_text().replace('v0.3.4', 'v0.3.5'))
+
+          bridge_zip = app / 'BeamNG_Mod' / 'draglab_bridge_v0.2.zip'
+          work = Path('bridge_work')
+          if work.exists():
+              shutil.rmtree(work)
+          work.mkdir()
+          with zipfile.ZipFile(bridge_zip, 'r') as z:
+              z.extractall(work)
+
+          info = work / 'info.json'
+          idata = json.loads(info.read_text())
+          idata['version'] = '0.3.5'
+          info.write_text(json.dumps(idata, indent=2) + '\n')
+
+          lua = work / 'lua' / 'vehicle' / 'extensions' / 'auto' / 'draglabTelemetry.lua'
+          s = lua.read_text()
+          s = s.replace("payload.version = '0.3.1'", "payload.version = '0.3.5'")
+          s = s.replace("payload.version = '0.3.2'", "payload.version = '0.3.5'")
+          s = s.replace("payload.version = '0.3.3'", "payload.version = '0.3.5'")
+          s = s.replace("payload.version = '0.3.4'", "payload.version = '0.3.5'")
+
+          old = """  local mn = tonumber(def.min)
+  local mx = tonumber(def.max)
+  if mn and n < mn - 1e-9 then return nil, 'below minimum' end
+  if mx and n > mx + 1e-9 then return nil, 'above maximum' end
+  return n, nil
+"""
+          new = """  local mn = tonumber(def.min)
+  local mx = tonumber(def.max)
+  -- Some BeamNG JBeam variables intentionally publish their endpoints in
+  -- descending order (for example toe/caster can report 1.02 -> 0.98).
+  -- Treat min/max as two bounds, not as guaranteed low/high values.
+  local lo = mn
+  local hi = mx
+  if mn and mx and mn > mx then
+    lo = mx
+    hi = mn
+  end
+  if lo and n < lo - 1e-9 then return nil, 'below lower bound' end
+  if hi and n > hi + 1e-9 then return nil, 'above upper bound' end
+  return n, nil
+"""
+          if old not in s:
+              raise RuntimeError('clampTuneValue bounds block not found')
+          s = s.replace(old, new, 1)
+          lua.write_text(s)
+
+          with zipfile.ZipFile(bridge_zip, 'w', zipfile.ZIP_DEFLATED) as z:
+              for f in sorted(work.rglob('*')):
+                  if f.is_file():
+                      z.write(f, f.relative_to(work).as_posix())
           PY
 
           rm -f release/DragLab_Update.zip
@@ -140,18 +105,16 @@ jobs:
           unzip -t release/DragLab_Update.zip
 
           python3 - <<'PY'
-          import json, zipfile
+          import json, zipfile, io
           z = zipfile.ZipFile('release/DragLab_Update.zip')
           v = json.loads(z.read('app/version.json'))
-          assert v['version'] == '0.3.4'
-          server = z.read('app/DragLab_Server.ps1').decode()
-          assert 'function Convert-SetupToValues(' in server
-          assert '$vals = Convert-SetupToValues $autoTune.bestSetup $c.name ([double]$target)' in server
-          assert '$vals = Convert-SetupToValues $autoTune.bestSetup $null $null' in server
-          assert '$values = Convert-SetupToValues $autoTune.bestSetup $null $null' in server
-          assert '$baseline = @($eligible | Sort-Object { [double]$_.et })[0]' in server
-          assert 'FULL SETUP verified' in server
-          print('Verified JLRP v0.3.4 full-config preservation + fastest matching baseline')
+          assert v['version'] == '0.3.5'
+          bz = zipfile.ZipFile(io.BytesIO(z.read('app/BeamNG_Mod/draglab_bridge_v0.2.zip')))
+          lua = bz.read('lua/vehicle/extensions/auto/draglabTelemetry.lua').decode()
+          assert 'if mn and mx and mn > mx then' in lua
+          assert "below lower bound" in lua
+          assert "above upper bound" in lua
+          print('Verified JLRP v0.3.5 descending-bound validation fix')
           PY
 
       - name: Read version

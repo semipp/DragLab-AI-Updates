@@ -1,10 +1,8 @@
-JLRP DragLab v0.3.4 - Safe One-Variable Auto-Tune Fix
+JLRP DragLab v0.3.5 - Reversed JBeam Bounds Fix
 
-- IMPORTANT: fixes BeamNG resetting omitted JBeam variables to defaults when Auto-Tune changed only one variable.
-- Every Auto-Tune apply now resends the complete captured setup and overrides exactly one target variable.
-- Revert and Restore Best Setup now restore the complete captured setup, not just managed candidate values.
-- Auto-Tune will not enter WAITING FOR OFFICIAL PASS until the entire expected setup is verified after the reload.
-- Baseline selection now uses the fastest BeamNG OFFICIAL pass matching the current vehicle + exact setup hash.
-- This means the R35's stored 6.224 PB is used when its setup matches, instead of simply using the latest 6.247 pass.
-- Keeps the v0.3.2/0.3.3 39-variable scanner and command-channel fixes.
-- Wheel-slip telemetry remains excluded from tuning decisions.
+- Fixes Auto-Tune failing with "$toe_FR: below minimum" while restoring or applying the full setup.
+- Some BeamNG JBeam variables publish their two bounds in descending order, e.g. 1.02 -> 0.98.
+- The bridge now normalizes those endpoints before validating a value.
+- Keeps v0.3.4 full-setup preservation so changing rear tire pressure does not reset power, gearing, suspension, alignment, or other tune values.
+- Keeps the fastest matching BeamNG OFFICIAL baseline logic, so the matching 6.224 PB remains the benchmark.
+- Official BeamNG quarter-mile ET remains the KEEP/REVERT judge.

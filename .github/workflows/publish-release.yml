@@ -3,9 +3,10 @@ name: Publish DragLab Update
 on:
   push:
     paths:
-      - 'release/DragLab_Update.zip'
+      - 'package_b64/**'
       - 'release/version.txt'
       - 'release/notes.md'
+      - '.github/workflows/publish-release.yml'
 
 permissions:
   contents: write
@@ -16,6 +17,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Rebuild and verify update ZIP
+        shell: bash
+        run: |
+          cat package_b64/part*.txt | tr -d '\r\n' | base64 --decode > release/DragLab_Update.zip
+          test "$(stat -c%s release/DragLab_Update.zip)" -eq 37165
+          echo "9b33a6e96eb0faf7caf9c2b578ec147503bfaa9c42e8be75bccc22c3e82c86a1  release/DragLab_Update.zip" | sha256sum -c -
+          unzip -t release/DragLab_Update.zip
 
       - name: Read version
         id: version
@@ -30,12 +39,6 @@ jobs:
           VERSION="${{ steps.version.outputs.version }}"
           TAG="v${VERSION}"
           gh release delete "$TAG" --yes --cleanup-tag || true
-          if [ -f release/DragLab_Update.zip ]; then
-            gh release create "$TAG" release/DragLab_Update.zip \
-              --title "DragLab AI $TAG" \
-              --notes-file release/notes.md
-          else
-            gh release create "$TAG" \
-              --title "DragLab AI $TAG" \
-              --notes-file release/notes.md
-          fi
+          gh release create "$TAG" release/DragLab_Update.zip \
+            --title "JLRP DragLab $TAG" \
+            --notes-file release/notes.md

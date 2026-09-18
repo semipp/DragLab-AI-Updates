@@ -1,4 +1,4 @@
-name: Inspect v0.3.5 Auto-Tune
+name: Inspect v0.3.5 Status
 
 on:
   push:
@@ -20,8 +20,7 @@ jobs:
           mkdir -p base build
           gh release download v0.3.5 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-      - name: Show state and telemetry processing
+      - name: Show status message handling
         run: |
-          nl -ba build/app/DragLab_Server.ps1 | sed -n '100,180p'
-          nl -ba build/app/DragLab_Server.ps1 | sed -n '600,710p'
-          nl -ba build/app/DragLab_Server.ps1 | sed -n '760,830p'
+          nl -ba build/app/DragLab_Server.ps1 | sed -n '710,780p'
+          grep -n -C 3 '\$state.status' build/app/DragLab_Server.ps1

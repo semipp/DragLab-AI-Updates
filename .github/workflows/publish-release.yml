@@ -79,74 +79,78 @@ jobs:
               raise RuntimeError('REVERT block not found')
           s = s.replace(old_revert, new_revert, 1)
 
-          old_house = """function Update-AutoTuneHousekeeping {
-    if ($null -eq $autoTune.pendingApply) { return }
-    try {
-        $sent = [DateTime]::Parse([string]$autoTune.pendingApply.sentAt).ToUniversalTime()
-        $age = ([DateTime]::UtcNow - $sent).TotalSeconds
-        if ($age -gt 20) {
-            $autoTune.active = $false
-            $autoTune.phase = 'ERROR'
-            $autoTune.lastError = 'BeamNG did not verify the tune change within 20 seconds.'
-            $autoTune.lastDecision = 'AUTO-TUNE ERROR: tune change was not verified. Use Restore Best Setup or repair/restart the BeamNG bridge.'
-            $autoTune.pendingApply = $null
-            $autoTune.currentExperiment = $null
-            Save-AutoTune
-        }
-    } catch {}
-}
-"""
-          new_house = """function Update-AutoTuneHousekeeping {
-    # After a pass, never fire the next tune into a car that is still at the
-    # finish line / RESET REQUIRED. Wait for the user to recover/reset first.
-    if ($autoTune.active -and $null -eq $autoTune.pendingApply) {
-        $readyStatus = $state.status -in @('IDLE','ARMED')
-        $stopped = $true
-        try {
-            if ($null -ne $state.telemetry -and $null -ne $state.telemetry.speedMph) {
-                $stopped = [Math]::Abs([double]$state.telemetry.speedMph) -lt 1.0
-            }
-        } catch { $stopped = $true }
-
-        if ($readyStatus -and $stopped) {
-            if ($autoTune.phase -eq 'WAITING FOR RESET') {
-                $autoTune.phase = 'PREPARING NEXT TEST'
-                Save-AutoTune
-                Start-NextAutoTuneExperiment
-                return
-            }
-            if ($autoTune.phase -eq 'WAITING FOR RESET TO REVERT') {
-                $vals = Convert-SetupToValues $autoTune.bestSetup $null $null
-                if ($vals.PSObject.Properties.Count -eq 0) {
-                    $autoTune.active = $false
-                    $autoTune.phase = 'ERROR'
-                    $autoTune.lastError = 'Best setup is empty; cannot revert.'
-                    $autoTune.lastDecision = 'AUTO-TUNE ERROR: best setup could not be restored.'
-                    Save-AutoTune
-                    return
-                }
-                Send-AutoTuneValues $vals 'revert' 'Reset detected. Restoring the best known setup before the next controlled test.'
-                return
-            }
-        }
-    }
-
-    if ($null -eq $autoTune.pendingApply) { return }
-    try {
-        $sent = [DateTime]::Parse([string]$autoTune.pendingApply.sentAt).ToUniversalTime()
-        $age = ([DateTime]::UtcNow - $sent).TotalSeconds
-        if ($age -gt 45) {
-            $autoTune.active = $false
-            $autoTune.phase = 'ERROR'
-            $autoTune.lastError = 'BeamNG did not verify the tune change within 45 seconds.'
-            $autoTune.lastDecision = 'AUTO-TUNE ERROR: tune change was not verified. Use Restore Best Setup or repair/restart the BeamNG bridge.'
-            $autoTune.pendingApply = $null
-            $autoTune.currentExperiment = $null
-            Save-AutoTune
-        }
-    } catch {}
-}
-"""
+          old_house = "\n".join([
+              "function Update-AutoTuneHousekeeping {",
+              "    if ($null -eq $autoTune.pendingApply) { return }",
+              "    try {",
+              "        $sent = [DateTime]::Parse([string]$autoTune.pendingApply.sentAt).ToUniversalTime()",
+              "        $age = ([DateTime]::UtcNow - $sent).TotalSeconds",
+              "        if ($age -gt 20) {",
+              "            $autoTune.active = $false",
+              "            $autoTune.phase = 'ERROR'",
+              "            $autoTune.lastError = 'BeamNG did not verify the tune change within 20 seconds.'",
+              "            $autoTune.lastDecision = 'AUTO-TUNE ERROR: tune change was not verified. Use Restore Best Setup or repair/restart the BeamNG bridge.'",
+              "            $autoTune.pendingApply = $null",
+              "            $autoTune.currentExperiment = $null",
+              "            Save-AutoTune",
+              "        }",
+              "    } catch {}",
+              "}",
+              ""
+          ])
+          new_house = "\n".join([
+              "function Update-AutoTuneHousekeeping {",
+              "    # After a pass, never fire the next tune into a car that is still at the",
+              "    # finish line / RESET REQUIRED. Wait for the user to recover/reset first.",
+              "    if ($autoTune.active -and $null -eq $autoTune.pendingApply) {",
+              "        $readyStatus = $state.status -in @('IDLE','ARMED')",
+              "        $stopped = $true",
+              "        try {",
+              "            if ($null -ne $state.telemetry -and $null -ne $state.telemetry.speedMph) {",
+              "                $stopped = [Math]::Abs([double]$state.telemetry.speedMph) -lt 1.0",
+              "            }",
+              "        } catch { $stopped = $true }",
+              "",
+              "        if ($readyStatus -and $stopped) {",
+              "            if ($autoTune.phase -eq 'WAITING FOR RESET') {",
+              "                $autoTune.phase = 'PREPARING NEXT TEST'",
+              "                Save-AutoTune",
+              "                Start-NextAutoTuneExperiment",
+              "                return",
+              "            }",
+              "            if ($autoTune.phase -eq 'WAITING FOR RESET TO REVERT') {",
+              "                $vals = Convert-SetupToValues $autoTune.bestSetup $null $null",
+              "                if ($vals.PSObject.Properties.Count -eq 0) {",
+              "                    $autoTune.active = $false",
+              "                    $autoTune.phase = 'ERROR'",
+              "                    $autoTune.lastError = 'Best setup is empty; cannot revert.'",
+              "                    $autoTune.lastDecision = 'AUTO-TUNE ERROR: best setup could not be restored.'",
+              "                    Save-AutoTune",
+              "                    return",
+              "                }",
+              "                Send-AutoTuneValues $vals 'revert' 'Reset detected. Restoring the best known setup before the next controlled test.'",
+              "                return",
+              "            }",
+              "        }",
+              "    }",
+              "",
+              "    if ($null -eq $autoTune.pendingApply) { return }",
+              "    try {",
+              "        $sent = [DateTime]::Parse([string]$autoTune.pendingApply.sentAt).ToUniversalTime()",
+              "        $age = ([DateTime]::UtcNow - $sent).TotalSeconds",
+              "        if ($age -gt 45) {",
+              "            $autoTune.active = $false",
+              "            $autoTune.phase = 'ERROR'",
+              "            $autoTune.lastError = 'BeamNG did not verify the tune change within 45 seconds.'",
+              "            $autoTune.lastDecision = 'AUTO-TUNE ERROR: tune change was not verified. Use Restore Best Setup or repair/restart the BeamNG bridge.'",
+              "            $autoTune.pendingApply = $null",
+              "            $autoTune.currentExperiment = $null",
+              "            Save-AutoTune",
+              "        }",
+              "    } catch {}",
+              "}",
+              ""
+          ])
           if old_house not in s:
               raise RuntimeError('housekeeping block not found')
           s = s.replace(old_house, new_house, 1)

@@ -1,4 +1,4 @@
-name: Inspect v0.3.6 Sync Patch Points
+name: Inspect v0.3.6 Official Parser Helpers
 
 on:
   push:
@@ -17,16 +17,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p base build
+          mkdir -p base build bridge
           gh release download v0.3.6 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-      - name: Show patch points
+          unzip -q build/app/BeamNG_Mod/draglab_bridge_v0.2.zip -d bridge
+      - name: Parser helper
         run: |
-          echo '=== top ==='
-          nl -ba build/app/DragLab_Server.ps1 | sed -n '1,95p'
-          echo '=== autotune save ==='
-          nl -ba build/app/DragLab_Server.ps1 | sed -n '145,230p'
-          echo '=== official apply ==='
-          nl -ba build/app/DragLab_Server.ps1 | sed -n '535,620p'
-          echo '=== status ==='
-          nl -ba build/app/DragLab_Server.ps1 | sed -n '820,930p'
+          nl -ba bridge/lua/ge/extensions/draglabOfficialSync.lua | sed -n '145,205p'

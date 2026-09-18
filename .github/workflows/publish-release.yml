@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - 'package_b64/**'
+      - 'pack2/**'
       - 'release/version.txt'
       - 'release/notes.md'
       - '.github/workflows/publish-release.yml'
@@ -21,7 +22,7 @@ jobs:
       - name: Rebuild and verify update ZIP
         shell: bash
         run: |
-          cat package_b64/part*.txt | tr -d '\r\n' | base64 --decode > release/DragLab_Update.zip
+          cat             pack2/p00a.txt             pack2/p00b1a1.txt             pack2/p00b1a2x1.txt             pack2/p00b1a2x2.txt             pack2/p00b1b.txt             pack2/p00b2.txt             package_b64/part01.txt             package_b64/part02.txt             pack2/p03a.txt             pack2/p03b.txt             package_b64/part04.txt             package_b64/part05.txt             package_b64/part06.txt             | tr -d '\r\n' | base64 --decode > release/DragLab_Update.zip
           test "$(stat -c%s release/DragLab_Update.zip)" -eq 37165
           echo "9b33a6e96eb0faf7caf9c2b578ec147503bfaa9c42e8be75bccc22c3e82c86a1  release/DragLab_Update.zip" | sha256sum -c -
           unzip -t release/DragLab_Update.zip

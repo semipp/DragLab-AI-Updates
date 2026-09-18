@@ -17,13 +17,14 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p base build bridge
+          mkdir -p base build
           gh release download v0.3.5 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-          unzip -q build/app/BeamNG_Mod/draglab_bridge_v0.2.zip -d bridge
-      - name: Show Auto-Tune verification and timeout code
+      - name: Exact post-pass and verification code
         run: |
-          nl -ba build/app/DragLab_Server.ps1 | sed -n '180,470p'
-      - name: Show bridge set_vars handler
-        run: |
-          nl -ba bridge/lua/vehicle/extensions/auto/draglabTelemetry.lua | sed -n '150,260p'
+          echo '=== 300-370 ==='
+          nl -ba build/app/DragLab_Server.ps1 | sed -n '300,370p'
+          echo '=== verification error matches ==='
+          grep -n -C 8 -F 'tune change was not verified' build/app/DragLab_Server.ps1 || true
+          echo '=== pendingApply matches ==='
+          grep -n -C 4 'pendingApply' build/app/DragLab_Server.ps1 | tail -n 120

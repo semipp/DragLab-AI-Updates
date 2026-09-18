@@ -193,20 +193,30 @@ p.write_text(h)
 for helper in ("Setup_JLRP_Run_Sync.ps1", "Sync_JLRP_RunData.ps1"):
     p = app / helper
     t = p.read_text().replace("0.3.7", "0.3.8")
-    auth_pattern = re.compile(r"(?m)^(\\s*)& \\$gh auth status --hostname github\\.com \\*> \\$null\\n\\1if \\(\\$LASTEXITCODE -ne 0\\) \\{")
-    m = auth_pattern.search(t)
-    if not m:
-        raise RuntimeError(helper + " auth status not found")
-    indent = m.group(1)
+    command = "& $gh auth status --hostname github.com *> $null"
+    idx = t.find(command)
+    if idx < 0:
+        raise RuntimeError(helper + " auth command not found")
+    line_start = t.rfind("\n", 0, idx) + 1
+    line_end = t.find("\n", idx)
+    if line_end < 0:
+        line_end = len(t)
+        suffix = ""
+    else:
+        suffix = "\n"
+    indent = t[line_start:idx]
     replacement = (
-        indent + "$oldEap = $ErrorActionPreference\\n" +
-        indent + "$ErrorActionPreference = 'SilentlyContinue'\\n" +
-        indent + "& $gh auth status --hostname github.com *> $null\\n" +
-        indent + "$authExit = $LASTEXITCODE\\n" +
-        indent + "$ErrorActionPreference = $oldEap\\n" +
-        indent + "if ($authExit -ne 0) {"
+        indent + "$oldEap = $ErrorActionPreference\n" +
+        indent + "$ErrorActionPreference = 'SilentlyContinue'\n" +
+        indent + command + "\n" +
+        indent + "$authExit = $LASTEXITCODE\n" +
+        indent + "$ErrorActionPreference = $oldEap" + suffix
     )
-    t = t[:m.start()] + replacement + t[m.end():]
+    t = t[:line_start] + replacement + t[line_end + (1 if suffix else 0):]
+    old_if = indent + "if ($LASTEXITCODE -ne 0) {"
+    if old_if not in t:
+        raise RuntimeError(helper + " auth exit check not found")
+    t = t.replace(old_if, indent + "if ($authExit -ne 0) {", 1)
     p.write_text(t)
 
 # Bridge version bump; functionality stays the same.

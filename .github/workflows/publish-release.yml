@@ -42,86 +42,86 @@ jobs:
           p = app / 'DragLab_Server.ps1'
           s = p.read_text().replace('v0.3.3', 'v0.3.4')
 
-          # Build a complete config-var payload from a captured setup. BeamNG's
-          # setConfigVars(..., true) respawns/reloads the vehicle, so sending one
-          # variable by itself can reset every omitted JBeam var to its default.
-          helper = r'''
-function Convert-SetupToValues($setup, [string]$overrideName, $overrideValue) {
-    $values = [pscustomobject]@{}
-    foreach ($v in @($setup)) {
-        $name = [string]$v.name
-        if (-not $name) { continue }
-        try {
-            $n = [double]$v.value
-            $values | Add-Member -NotePropertyName $name -NotePropertyValue $n -Force
-        } catch {}
-    }
-    if ($overrideName) {
-        $values | Add-Member -NotePropertyName $overrideName -NotePropertyValue ([double]$overrideValue) -Force
-    }
-    return $values
-}
+          helper = "\n".join([
+              "function Convert-SetupToValues($setup, [string]$overrideName, $overrideValue) {",
+              "    $values = [pscustomobject]@{}",
+              "    foreach ($v in @($setup)) {",
+              "        $name = [string]$v.name",
+              "        if (-not $name) { continue }",
+              "        try {",
+              "            $n = [double]$v.value",
+              "            $values | Add-Member -NotePropertyName $name -NotePropertyValue $n -Force",
+              "        } catch {}",
+              "    }",
+              "    if ($overrideName) {",
+              "        $values | Add-Member -NotePropertyName $overrideName -NotePropertyValue ([double]$overrideValue) -Force",
+              "    }",
+              "    return $values",
+              "}",
+              ""
+          ]) + "\n"
 
-'''
           needle = 'function Get-AutoTuneCandidates($setup) {'
           if 'function Convert-SetupToValues(' not in s:
               if needle not in s:
                   raise RuntimeError('candidate helper insertion point not found')
               s = s.replace(needle, helper + needle, 1)
 
-          # Experiment apply: send the whole best setup with exactly one override.
           pat = re.compile(r"\$vals = \[pscustomobject\]@\{\}\r?\n\s*\$vals \| Add-Member -NotePropertyName \$c\.name -NotePropertyValue \(\[double\]\$target\)")
           s, n = pat.subn(r"$vals = Convert-SetupToValues $autoTune.bestSetup $c.name ([double]$target)", s, count=1)
           if n != 1:
               raise RuntimeError(f'experiment full-setup patch count={n}')
 
-          # Revert: restore the entire best setup, not only the candidate variable.
           pat = re.compile(r"\$vals = \[pscustomobject\]@\{\}\r?\n\s*\$vals \| Add-Member -NotePropertyName \$c\.name -NotePropertyValue \(\[double\]\$bestValue\)")
           s, n = pat.subn(r"$vals = Convert-SetupToValues $autoTune.bestSetup $null $null", s, count=1)
           if n != 1:
               raise RuntimeError(f'revert full-setup patch count={n}')
 
-          # Restore Best Setup: restore every captured JBeam var.
-          old_restore = r'''    $values = [pscustomobject]@{}
-    foreach ($c in @($autoTune.candidateStates)) {
-        $v = Get-SetupValue $autoTune.bestSetup $c.name
-        if ($null -ne $v) { $values | Add-Member -NotePropertyName $c.name -NotePropertyValue ([double]$v) -Force }
-    }
-    if ($values.PSObject.Properties.Count -eq 0) { throw 'No managed Auto-Tune values are available to restore.' }
-'''
-          new_restore = r'''    $values = Convert-SetupToValues $autoTune.bestSetup $null $null
-    if ($values.PSObject.Properties.Count -eq 0) { throw 'No captured setup values are available to restore.' }
-'''
+          old_restore = "\n".join([
+              "    $values = [pscustomobject]@{}",
+              "    foreach ($c in @($autoTune.candidateStates)) {",
+              "        $v = Get-SetupValue $autoTune.bestSetup $c.name",
+              "        if ($null -ne $v) { $values | Add-Member -NotePropertyName $c.name -NotePropertyValue ([double]$v) -Force }",
+              "    }",
+              "    if ($values.PSObject.Properties.Count -eq 0) { throw 'No managed Auto-Tune values are available to restore.' }",
+              ""
+          ])
+          new_restore = "\n".join([
+              "    $values = Convert-SetupToValues $autoTune.bestSetup $null $null",
+              "    if ($values.PSObject.Properties.Count -eq 0) { throw 'No captured setup values are available to restore.' }",
+              ""
+          ])
           if old_restore not in s:
               raise RuntimeError('restore block not found')
           s = s.replace(old_restore, new_restore, 1)
 
-          # Baseline: choose the fastest OFFICIAL run that exactly matches the
-          # current vehicle and setup, rather than simply the most recent run.
-          old_base = r'''    $baseline = $null
-    for ($i=$runs.Count-1; $i -ge 0; $i--) {
-        $r=$runs[$i]
-        if ([string]$r.timingSource -eq 'beamng-official' -and $null -ne $r.setup -and @($r.setup).Count -gt 0) { $baseline=$r; break }
-    }
-'''
-          new_base = r'''    $baseline = $null
-    $eligible = New-Object System.Collections.ArrayList
-    foreach ($r in @($runs)) {
-        if ([string]$r.timingSource -ne 'beamng-official') { continue }
-        if ($null -eq $r.setup -or @($r.setup).Count -eq 0) { continue }
-        if ($state.vehicleKey -and $r.vehicleKey -and ([string]$state.vehicleKey -ne [string]$r.vehicleKey)) { continue }
-        if ($state.setupHash -and $r.setupHash -and ([string]$state.setupHash -ne [string]$r.setupHash)) { continue }
-        [void]$eligible.Add($r)
-    }
-    if ($eligible.Count -gt 0) {
-        $baseline = @($eligible | Sort-Object { [double]$_.et })[0]
-    }
-'''
+          old_base = "\n".join([
+              "    $baseline = $null",
+              "    for ($i=$runs.Count-1; $i -ge 0; $i--) {",
+              "        $r=$runs[$i]",
+              "        if ([string]$r.timingSource -eq 'beamng-official' -and $null -ne $r.setup -and @($r.setup).Count -gt 0) { $baseline=$r; break }",
+              "    }",
+              ""
+          ])
+          new_base = "\n".join([
+              "    $baseline = $null",
+              "    $eligible = New-Object System.Collections.ArrayList",
+              "    foreach ($r in @($runs)) {",
+              "        if ([string]$r.timingSource -ne 'beamng-official') { continue }",
+              "        if ($null -eq $r.setup -or @($r.setup).Count -eq 0) { continue }",
+              "        if ($state.vehicleKey -and $r.vehicleKey -and ([string]$state.vehicleKey -ne [string]$r.vehicleKey)) { continue }",
+              "        if ($state.setupHash -and $r.setupHash -and ([string]$state.setupHash -ne [string]$r.setupHash)) { continue }",
+              "        [void]$eligible.Add($r)",
+              "    }",
+              "    if ($eligible.Count -gt 0) {",
+              "        $baseline = @($eligible | Sort-Object { [double]$_.et })[0]",
+              "    }",
+              ""
+          ])
           if old_base not in s:
               raise RuntimeError('baseline selection block not found')
           s = s.replace(old_base, new_base, 1)
 
-          # Stronger message: verification now means the entire captured setup matched.
           s = s.replace(
               'Tune applied and verified. Make a full quarter-mile pass; only BeamNG official timing will be judged.',
               'Tune applied and FULL SETUP verified. Make a full quarter-mile pass; only BeamNG official timing will be judged.'
@@ -130,8 +130,7 @@ function Convert-SetupToValues($setup, [string]$overrideName, $overrideValue) {
           p.write_text(s)
 
           p = app / 'www' / 'index.html'
-          s = p.read_text().replace('v0.3.3', 'v0.3.4')
-          p.write_text(s)
+          p.write_text(p.read_text().replace('v0.3.3', 'v0.3.4'))
           PY
 
           rm -f release/DragLab_Update.zip

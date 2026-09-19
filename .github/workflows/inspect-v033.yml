@@ -1,4 +1,4 @@
-name: Inspect v0.3.10 Auto-Tune Core
+name: Inspect v0.3.10 Candidate Logic
 
 on:
   push:
@@ -21,8 +21,8 @@ jobs:
           mkdir -p base build
           gh release download v0.3.10 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-      - name: Print exact Auto-Tune core
+      - name: Print candidate logic
         run: |
-          sed -n '244,284p' build/app/DragLab_Server.ps1
-          echo '=== CORE ==='
-          sed -n '560,780p' build/app/DragLab_Server.ps1
+          grep -n -A 180 "function Get-AutoTuneCandidates" build/app/DragLab_Server.ps1
+          echo '=== NEXT EXPERIMENT ==='
+          grep -n -A 170 "function Start-NextAutoTuneExperiment" build/app/DragLab_Server.ps1

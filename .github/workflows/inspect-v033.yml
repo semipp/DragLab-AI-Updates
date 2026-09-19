@@ -1,4 +1,4 @@
-name: Inspect v0.3.9 Official Heartbeat
+name: Inspect v0.3.9 Beam Remote Routing
 
 on:
   push:
@@ -17,11 +17,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rm -rf base build bridge
-          mkdir -p base build bridge
+          rm -rf base build
+          mkdir -p base build
           gh release download v0.3.9 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-          unzip -q build/app/BeamNG_Mod/draglab_bridge_v0.2.zip -d bridge
-      - name: Print heartbeat
+      - name: Print beam remote routing
         run: |
-          nl -ba bridge/lua/ge/extensions/draglabOfficialSync.lua | sed -n '618,680p'
+          grep -n -C 8 "\$script:beamRemote" build/app/DragLab_Server.ps1 || true

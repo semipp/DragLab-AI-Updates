@@ -1,4 +1,4 @@
-name: Inspect v0.3.9 Official Status Routing
+name: Inspect v0.3.9 Official Heartbeat
 
 on:
   push:
@@ -22,8 +22,6 @@ jobs:
           gh release download v0.3.9 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
           unzip -q build/app/BeamNG_Mod/draglab_bridge_v0.2.zip -d bridge
-      - name: Print status routing
+      - name: Print heartbeat
         run: |
-          grep -n -C 12 "official_sync_status" bridge/lua/ge/extensions/draglabOfficialSync.lua || true
-          echo "SERVER"
-          nl -ba build/app/DragLab_Server.ps1 | sed -n '1008,1040p'
+          nl -ba bridge/lua/ge/extensions/draglabOfficialSync.lua | sed -n '618,680p'

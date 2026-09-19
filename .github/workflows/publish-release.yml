@@ -5,7 +5,7 @@ on:
     paths:
       - 'release/version.txt'
       - 'release/notes.md'
-      - 'release/build_v0313.py'
+      - 'release/build_v0314.py'
       - '.github/workflows/publish-release.yml'
 
 permissions:
@@ -18,7 +18,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build v0.3.13 from verified v0.3.12 base
+      - name: Build v0.3.14 from verified v0.3.13 base
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -26,9 +26,9 @@ jobs:
           set -euo pipefail
           rm -rf base build verify_app
           mkdir -p base build
-          gh release download v0.3.12 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          gh release download v0.3.13 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-          python3 release/build_v0313.py build
+          python3 release/build_v0314.py build
 
           rm -f release/DragLab_Update.zip
           (cd build && zip -qr ../release/DragLab_Update.zip app)
@@ -36,33 +36,44 @@ jobs:
           test "$(stat -c%s release/DragLab_Update.zip)" -gt 30000
           unzip -t release/DragLab_Update.zip
 
-      - name: Verify v0.3.13 package
+      - name: Verify v0.3.14 package
         shell: bash
         run: |
           python3 - <<'PY'
           import json, zipfile, io
           z = zipfile.ZipFile('release/DragLab_Update.zip')
           v = json.loads(z.read('app/version.json'))
-          assert v['version'] == '0.3.13'
+          assert v['version'] == '0.3.14'
           assert v['bridgeVersion'] == '0.3.10'
 
           server = z.read('app/DragLab_Server.ps1').decode()
           required = [
-              "$historyList = New-Object System.Collections.ArrayList",
-              "function Recover-MissedOfficialAutoTunePass",
-              "$resumeComplete = $false",
-              "$autoTune.phase = 'COMPLETE'",
+              "stage2CandidateStates = @()",
+              "stage2HistoryCount = 0",
+              "stage3BaselineRunId = $null",
+              "stage3BaselineEt = $null",
+              "} elseif ($stage -eq 3) {",
+              "$name -eq '$tirepressure_R'",
+              "$name -eq '$arb_spring_R'",
+              "$name -eq '$spring_R'",
+              "$name -eq '$damp_rebound_F'",
+              "$name -eq '$damp_bump_F'",
+              "function Begin-Stage3FromBest",
+              "function Resume-Stage3FromBest",
+              "$autoTune.stage2CandidateStates = @($autoTune.candidateStates)",
+              "$autoTune.stage2HistoryCount = @($autoTune.history).Count",
+              "$autoTune.stage3BaselineRunId = [string]$autoTune.bestRunId",
+              "$autoTune.stage3BaselineEt = [double]$autoTune.bestEt",
+              "$autoTune.stage = 3",
+              "Get-AutoTuneCandidates $autoTune.bestSetup 3",
+              "Convert-SetupToValues $autoTune.bestSetup $null $null",
+              "Send-AutoTuneValues $vals 'stage3-foundation'",
+              "Send-AutoTuneValues $vals 'stage3-resume'",
+              "stage=[int]$autoTune.stage; runId=$run.id",
+              "Post-Gearing Chassis Refinement",
+              "stage2Candidates=@($autoTune.stage2CandidateStates)",
               "function Promote-CompletedAutoTunePbIfEligible",
-              "if ([string]$autoTune.phase -ne 'COMPLETE') { return $false }",
-              "if ($null -ne $autoTune.currentExperiment -or $null -ne $autoTune.pendingApply) { return $false }",
-              "if ($null -eq $r.setup -or @($r.setup).Count -ne $expectedCount) { continue }",
-              "if (-not (Test-SetupMatchesValues $r.setup $expected)) { continue }",
-              "if ($pbEt -ge $oldEt) { return $false }",
-              "$autoTune.bestRunId = [string]$pb.id",
-              "$autoTune.bestEt = $pbEt",
-              "$autoTune.bestSetup = @($pb.setup)",
-              "COMPLETE PB PROMOTED:",
-              "Request-RunSync 'autotune-complete-pb'",
+              "function Recover-MissedOfficialAutoTunePass",
               "Request-RunSync 'official-pass'",
               "$script:playerVehicleId = $null",
               "if ([string]$msg.vehicleId -ne [string]$script:playerVehicleId)",
@@ -70,18 +81,24 @@ jobs:
           for needle in required:
               assert needle in server, needle
 
-          helper = server.split("function Promote-CompletedAutoTunePbIfEligible",1)[1].split("function Get-Stage1FoundationRun",1)[0]
-          forbidden = [
+          stage3 = server.split("function Begin-Stage3FromBest",1)[1].split("function Resume-Stage3FromBest",1)[0]
+          for forbidden in [
               "$autoTune.baselineRunId =",
               "$autoTune.history =",
-              "$autoTune.candidateStates =",
-              "$autoTune.candidateIndex =",
               "$runs.Clear()",
-          ]
-          for needle in forbidden:
-              assert needle not in helper, needle
+          ]:
+              assert forbidden not in stage3, forbidden
 
-          # Existing OFFICIAL decision-recovery and player-routing safety remain mandatory.
+          p_archive = stage3.index("$autoTune.stage2CandidateStates = @($autoTune.candidateStates)")
+          p_replace = stage3.index("$autoTune.candidateStates = @($candidates)")
+          assert p_archive < p_replace
+
+          start = server.split("function Start-AutoTune",1)[1].split("function Stop-AutoTune",1)[0]
+          assert "Begin-Stage3FromBest 'Stage 2 is complete." in start
+          assert "if ($stageNow -eq 3)" in start
+          assert "Resume-Stage3FromBest" in start
+
+          assert "$resumeComplete = $false" in server
           assert "On-OfficialRunFinalizedForAutoTune $missed" in server
           assert "Auto-Tune OFFICIAL judge failed:" in server
           assert "$script:beamRemote = [System.Net.IPEndPoint]::new($remote.Address, $remote.Port)" not in server
@@ -95,9 +112,9 @@ jobs:
           assert info['version'] == '0.3.10'
 
           html = z.read('app/www/index.html').decode()
-          assert '0.3.13' in html
-          assert 'promotes a later faster OFFICIAL pass only when its full captured setup exactly matches the completed best setup' in html
-          print('Verified JLRP v0.3.13 completed-sweep PB promotion')
+          assert '0.3.14' in html
+          assert 'Stage 3 starts only after completed Stage 2' in html
+          print('Verified JLRP v0.3.14 Stage 3 post-gearing chassis refinement')
           PY
 
           mkdir -p verify_app

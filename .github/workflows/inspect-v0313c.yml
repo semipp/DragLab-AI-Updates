@@ -1,0 +1,43 @@
+name: Inspect DragLab v0.3.13 state
+
+on:
+  push:
+    paths:
+      - '.github/workflows/inspect-v0313c.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect state persistence
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf inspect && mkdir inspect
+          gh release download v0.3.13 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir inspect --clobber
+          unzip -q inspect/DragLab_Update.zip -d inspect/pkg
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('inspect/pkg/app/DragLab_Server.ps1').read_text()
+          lines=s.splitlines()
+          markers=[
+            ('$autoTune = [ordered]@{','function Get-SetupHash'),
+            ('function Save-AutoTune','function Convert-SetupToValues'),
+            ('function Get-AutoTuneStatus','function Restore-BestAutoTuneSetup'),
+          ]
+          for a_m,b_m in markers:
+              print('\n===== '+a_m+' =====')
+              starts=[i for i,l in enumerate(lines) if a_m in l]
+              if not starts: print('NOT FOUND'); continue
+              a=starts[0]
+              ends=[i for i,l in enumerate(lines[a+1:],start=a+1) if b_m in l]
+              b=ends[0] if ends else min(len(lines),a+220)
+              for n in range(a,min(b+1,len(lines))):
+                  print(f'{n+1:05d}: {lines[n]}')
+          PY

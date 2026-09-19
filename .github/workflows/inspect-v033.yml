@@ -1,4 +1,4 @@
-name: Inspect v0.3.11 Official Auto-Tune Hook
+name: Inspect v0.3.11 Auto-Tune Resume
 
 on:
   push:
@@ -21,10 +21,10 @@ jobs:
           mkdir -p base build
           gh release download v0.3.11 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-      - name: Print official result and Auto-Tune hook
+      - name: Print resume/revert logic
         run: |
-          grep -n -C 35 "On-OfficialRunFinalizedForAutoTune" build/app/DragLab_Server.ps1 || true
-          echo '=== APPLY OFFICIAL ==='
-          grep -n -A 180 "function Apply-OfficialResult" build/app/DragLab_Server.ps1 || true
-          echo '=== FINALIZE RUN ==='
-          grep -n -C 30 "Save-Runs\|Request-RunSync" build/app/DragLab_Server.ps1 | tail -n 420 || true
+          sed -n '244,286p' build/app/DragLab_Server.ps1
+          echo '=== JUDGE TAIL ==='
+          sed -n '524,590p' build/app/DragLab_Server.ps1
+          echo '=== RESET LOGIC ==='
+          grep -n -C 25 "WAITING FOR RESET" build/app/DragLab_Server.ps1 || true

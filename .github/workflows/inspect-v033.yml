@@ -1,4 +1,4 @@
-name: Inspect v0.3.8 Auto-Tune Reset Flow
+name: Inspect v0.3.9 Vehicle Selection
 
 on:
   push:
@@ -13,28 +13,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download v0.3.8
+      - name: Download v0.3.9
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rm -rf base build
-          mkdir -p base build
-          gh release download v0.3.8 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          rm -rf base build bridge
+          mkdir -p base build bridge
+          gh release download v0.3.9 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-      - name: Print reset and setup flow
+          unzip -q build/app/BeamNG_Mod/draglab_bridge_v0.2.zip -d bridge
+      - name: Print vehicle selection code
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('build/app/DragLab_Server.ps1')
-          lines=p.read_text().splitlines()
-          needles=['WAITING FOR RESET','pendingApply','On-SetupUpdatedForAutoTune','Start-NextAutoTuneExperiment','status -eq','state.status','On-Telemetry','Handle-Telemetry','setupHash']
-          hits=[]
-          for i,line in enumerate(lines):
-              if any(n.lower() in line.lower() for n in needles):
-                  hits.append(i)
-          for i in hits:
-              if 620 <= i+1 <= 1050:
-                  a=max(0,i-12); b=min(len(lines),i+24)
-                  print(f'--- lines {a+1}-{b} ---')
+          for p in Path('bridge').rglob('*.lua'):
+              lines=p.read_text(errors='ignore').splitlines()
+              needles=['getPlayerVehicle','getPlayerVehicleID','vehicleName','vehicleKey','setupHash','tunableCount','simple_traffic','be:getObjectByID','getObjectByID','map.objects']
+              hits=[i for i,l in enumerate(lines) if any(n.lower() in l.lower() for n in needles)]
+              if not hits: continue
+              print('FILE',p)
+              shown=set()
+              for i in hits:
+                  a=max(0,i-18); b=min(len(lines),i+30)
+                  key=(a,b)
+                  if key in shown: continue
+                  shown.add(key)
+                  print(f'--- {a+1}-{b} ---')
                   for j in range(a,b): print(f'{j+1:5}: {lines[j]}')
           PY

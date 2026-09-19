@@ -1,4 +1,4 @@
-name: Inspect v0.3.9 Server Vehicle Routing
+name: Inspect v0.3.9 Official Player ID Messages
 
 on:
   push:
@@ -17,10 +17,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rm -rf base build
-          mkdir -p base build
+          rm -rf base build bridge
+          mkdir -p base build bridge
           gh release download v0.3.9 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-      - name: Print server routing
+          unzip -q build/app/BeamNG_Mod/draglab_bridge_v0.2.zip -d bridge
+      - name: Print official player-id messages
         run: |
-          nl -ba build/app/DragLab_Server.ps1 | sed -n '820,1010p'
+          nl -ba bridge/lua/ge/extensions/draglabOfficialSync.lua | sed -n '400,525p'
+          echo "SERVER OFFICIAL TYPES"
+          grep -nE "official_|playerVehicleId|official_probe|official_result|official_hello|official_status" build/app/DragLab_Server.ps1 || true

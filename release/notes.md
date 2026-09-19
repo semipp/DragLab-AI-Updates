@@ -1,15 +1,15 @@
-# JLRP DragLab v0.3.12
+# JLRP DragLab v0.3.13
 
-## Auto-Tune OFFICIAL decision recovery
+## Completed-sweep OFFICIAL PB promotion
 
-Fixes the case where a BeamNG OFFICIAL pass is visible in JLRP but Auto-Tune remains stuck on **WAITING FOR OFFICIAL PASS**.
+Keeps a finished Stage 2 sweep closed while allowing later normal repeat passes on the exact completed best setup to update Auto-Tune's stored best OFFICIAL result.
 
-- Normalizes persisted Auto-Tune decision history back to a mutable ArrayList after JSON reload.
-- Safely preserves an already-verified experiment that is waiting only for its OFFICIAL timeslip across a desktop restart/update.
-- Recovers the **first matching OFFICIAL full-setup run recorded after the experiment started**, so a pass already made does not need to be repeated.
-- Recovery requires the exact full setup expected for the one-variable experiment.
-- Keeps the 6.207 PB foundation unchanged when a slower recovered pass is judged.
-- Wraps the Auto-Tune judge so an Auto-Tune bookkeeping error can never again prevent a valid OFFICIAL pass from being saved/private-synced.
-- Preserves all run history, Stage 2 progress, full-setup restore behavior, and v0.3.10 player-vehicle routing.
+- Preserves the **COMPLETE** Auto-Tune state across an app update/restart.
+- When Auto-Tune is COMPLETE and inactive, scans only **BeamNG OFFICIAL** runs for the same vehicle.
+- Requires the candidate run to contain the same complete captured setup count and to match every stored best-setup value.
+- Promotes only a strictly faster OFFICIAL ET on that exact completed best setup.
+- Updates only `bestRunId`, `bestEt`, split references, and the identical `bestSetup` snapshot.
+- Does **not** change `baselineRunId`, Stage 2 history, candidate states/index, run history, or reopen Auto-Tune.
+- Existing v0.3.12 OFFICIAL-pass recovery, full-setup safety, and v0.3.10 player-vehicle routing remain intact.
 
-For the current R35 session, the saved **6.319 OFFICIAL** pass at front tyre **28.0 psi** will be recovered and judged against the **6.207** PB foundation. It should REVERT, not become the new best.
+For the current R35 session this is designed to promote the verified **6.101 OFFICIAL @ 238.7 mph** run on the completed setup with **2nd gear 1.435**, while leaving the Stage 2 sweep and historical baseline checkpoint untouched.

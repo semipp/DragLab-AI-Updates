@@ -5,7 +5,7 @@ on:
     paths:
       - 'release/version.txt'
       - 'release/notes.md'
-      - 'release/build_v0312.py'
+      - 'release/build_v0313.py'
       - '.github/workflows/publish-release.yml'
 
 permissions:
@@ -18,7 +18,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build v0.3.12 from verified v0.3.11 base
+      - name: Build v0.3.13 from verified v0.3.12 base
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -26,9 +26,9 @@ jobs:
           set -euo pipefail
           rm -rf base build verify_app
           mkdir -p base build
-          gh release download v0.3.11 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          gh release download v0.3.12 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-          python3 release/build_v0312.py build
+          python3 release/build_v0313.py build
 
           rm -f release/DragLab_Update.zip
           (cd build && zip -qr ../release/DragLab_Update.zip app)
@@ -36,44 +36,54 @@ jobs:
           test "$(stat -c%s release/DragLab_Update.zip)" -gt 30000
           unzip -t release/DragLab_Update.zip
 
-      - name: Verify v0.3.12 package
+      - name: Verify v0.3.13 package
         shell: bash
         run: |
           python3 - <<'PY'
           import json, zipfile, io
           z = zipfile.ZipFile('release/DragLab_Update.zip')
           v = json.loads(z.read('app/version.json'))
-          assert v['version'] == '0.3.12'
+          assert v['version'] == '0.3.13'
           assert v['bridgeVersion'] == '0.3.10'
 
           server = z.read('app/DragLab_Server.ps1').decode()
           required = [
               "$historyList = New-Object System.Collections.ArrayList",
-              "[void]$historyList.Add($h)",
-              "$autoTune.history = $historyList",
-              "$resumeWaitingForOfficial",
-              "$autoTune.phase = 'WAITING FOR OFFICIAL PASS'",
               "function Recover-MissedOfficialAutoTunePass",
+              "$resumeComplete = $false",
+              "$autoTune.phase = 'COMPLETE'",
+              "function Promote-CompletedAutoTunePbIfEligible",
+              "if ([string]$autoTune.phase -ne 'COMPLETE') { return $false }",
+              "if ($null -ne $autoTune.currentExperiment -or $null -ne $autoTune.pendingApply) { return $false }",
+              "if ($null -eq $r.setup -or @($r.setup).Count -ne $expectedCount) { continue }",
               "if (-not (Test-SetupMatchesValues $r.setup $expected)) { continue }",
-              "$runUtc -le $started",
-              "$missed = @($eligible | Sort-Object { Get-RunUtc $_ })[0]",
-              "On-OfficialRunFinalizedForAutoTune $missed",
-              "[void](Recover-MissedOfficialAutoTunePass)",
-              "Auto-Tune OFFICIAL judge failed:",
+              "if ($pbEt -ge $oldEt) { return $false }",
+              "$autoTune.bestRunId = [string]$pb.id",
+              "$autoTune.bestEt = $pbEt",
+              "$autoTune.bestSetup = @($pb.setup)",
+              "COMPLETE PB PROMOTED:",
+              "Request-RunSync 'autotune-complete-pb'",
               "Request-RunSync 'official-pass'",
               "$script:playerVehicleId = $null",
               "if ([string]$msg.vehicleId -ne [string]$script:playerVehicleId)",
-              "pbFoundationPromoted=[bool]$autoTune.pbFoundationPromoted",
           ]
           for needle in required:
               assert needle in server, needle
 
-          # The official pass sync call must remain after the isolated judge block.
-          pos_judge = server.index("try {\n        On-OfficialRunFinalizedForAutoTune $run")
-          pos_sync = server.index("Request-RunSync 'official-pass'", pos_judge)
-          assert pos_sync > pos_judge
+          helper = server.split("function Promote-CompletedAutoTunePbIfEligible",1)[1].split("function Get-Stage1FoundationRun",1)[0]
+          forbidden = [
+              "$autoTune.baselineRunId =",
+              "$autoTune.history =",
+              "$autoTune.candidateStates =",
+              "$autoTune.candidateIndex =",
+              "$runs.Clear()",
+          ]
+          for needle in forbidden:
+              assert needle not in helper, needle
 
-          # Existing player-routing safety remains mandatory.
+          # Existing OFFICIAL decision-recovery and player-routing safety remain mandatory.
+          assert "On-OfficialRunFinalizedForAutoTune $missed" in server
+          assert "Auto-Tune OFFICIAL judge failed:" in server
           assert "$script:beamRemote = [System.Net.IPEndPoint]::new($remote.Address, $remote.Port)" not in server
           assert "$script:beamRemote = [System.Net.IPEndPoint]::new($senderRemote.Address, $senderRemote.Port)" in server
 
@@ -85,9 +95,9 @@ jobs:
           assert info['version'] == '0.3.10'
 
           html = z.read('app/www/index.html').decode()
-          assert '0.3.12' in html
-          assert 'recovers any saved OFFICIAL pass' in html
-          print('Verified JLRP v0.3.12 Auto-Tune OFFICIAL decision recovery')
+          assert '0.3.13' in html
+          assert 'promotes a later faster OFFICIAL pass only when its full captured setup exactly matches the completed best setup' in html
+          print('Verified JLRP v0.3.13 completed-sweep PB promotion')
           PY
 
           mkdir -p verify_app

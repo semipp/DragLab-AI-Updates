@@ -1,4 +1,4 @@
-name: Inspect v0.3.9 Beam Remote Routing
+name: Inspect v0.3.10 Auto-Tune Baseline
 
 on:
   push:
@@ -13,14 +13,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download v0.3.9
+      - name: Download v0.3.10
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           rm -rf base build
           mkdir -p base build
-          gh release download v0.3.9 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          gh release download v0.3.10 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-      - name: Print beam remote routing
+      - name: Print Auto-Tune baseline and restore code
         run: |
-          grep -n -C 8 "\$script:beamRemote" build/app/DragLab_Server.ps1 || true
+          echo '=== AUTO TUNE STATE / LOAD ==='
+          grep -n -C 20 "AutoTuneFile\|Load-AutoTune\|foundationRepaired" build/app/DragLab_Server.ps1 || true
+          echo '=== START AUTO TUNE ==='
+          grep -n -A 180 "function Start-AutoTune" build/app/DragLab_Server.ps1 || true
+          echo '=== RESTORE FUNCTIONS ==='
+          grep -n -A 120 "function Restore" build/app/DragLab_Server.ps1 || true
+          echo '=== HTTP AUTOTUNE ROUTES ==='
+          grep -n -C 15 "restore-best\|autotune" build/app/DragLab_Server.ps1 | tail -n 260 || true

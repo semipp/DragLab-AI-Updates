@@ -1,4 +1,4 @@
-name: Inspect v0.3.10 Candidate Logic
+name: Inspect v0.3.11 Official Auto-Tune Hook
 
 on:
   push:
@@ -13,16 +13,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Download v0.3.10
+      - name: Download v0.3.11
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           rm -rf base build
           mkdir -p base build
-          gh release download v0.3.10 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          gh release download v0.3.11 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-      - name: Print candidate logic
+      - name: Print official result and Auto-Tune hook
         run: |
-          grep -n -A 180 "function Get-AutoTuneCandidates" build/app/DragLab_Server.ps1
-          echo '=== NEXT EXPERIMENT ==='
-          grep -n -A 170 "function Start-NextAutoTuneExperiment" build/app/DragLab_Server.ps1
+          grep -n -C 35 "On-OfficialRunFinalizedForAutoTune" build/app/DragLab_Server.ps1 || true
+          echo '=== APPLY OFFICIAL ==='
+          grep -n -A 180 "function Apply-OfficialResult" build/app/DragLab_Server.ps1 || true
+          echo '=== FINALIZE RUN ==='
+          grep -n -C 30 "Save-Runs\|Request-RunSync" build/app/DragLab_Server.ps1 | tail -n 420 || true

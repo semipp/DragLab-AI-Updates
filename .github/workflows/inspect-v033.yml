@@ -1,4 +1,4 @@
-name: Inspect v0.3.10 Auto-Tune Baseline
+name: Inspect v0.3.10 Auto-Tune Core
 
 on:
   push:
@@ -21,13 +21,8 @@ jobs:
           mkdir -p base build
           gh release download v0.3.10 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-      - name: Print Auto-Tune baseline and restore code
+      - name: Print exact Auto-Tune core
         run: |
-          echo '=== AUTO TUNE STATE / LOAD ==='
-          grep -n -C 20 "AutoTuneFile\|Load-AutoTune\|foundationRepaired" build/app/DragLab_Server.ps1 || true
-          echo '=== START AUTO TUNE ==='
-          grep -n -A 180 "function Start-AutoTune" build/app/DragLab_Server.ps1 || true
-          echo '=== RESTORE FUNCTIONS ==='
-          grep -n -A 120 "function Restore" build/app/DragLab_Server.ps1 || true
-          echo '=== HTTP AUTOTUNE ROUTES ==='
-          grep -n -C 15 "restore-best\|autotune" build/app/DragLab_Server.ps1 | tail -n 260 || true
+          sed -n '244,284p' build/app/DragLab_Server.ps1
+          echo '=== CORE ==='
+          sed -n '560,780p' build/app/DragLab_Server.ps1

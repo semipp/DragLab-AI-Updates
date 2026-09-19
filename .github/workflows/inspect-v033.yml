@@ -1,4 +1,4 @@
-name: Inspect v0.3.9 Bridge Vehicle Identity
+name: Inspect v0.3.9 Server Vehicle Routing
 
 on:
   push:
@@ -17,14 +17,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          rm -rf base build bridge
-          mkdir -p base build bridge
+          rm -rf base build
+          mkdir -p base build
           gh release download v0.3.9 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-          unzip -q build/app/BeamNG_Mod/draglab_bridge_v0.2.zip -d bridge
-      - name: Inspect identity
+      - name: Print server routing
         run: |
-          echo "FILES"
-          find bridge -type f -maxdepth 8 -print
-          echo "MATCHES"
-          grep -RniE "vehicleName|vehicleKey|getPlayerVehicle|playerVehicle|model|jbeam|partConfig|vehicleId|vehId|sendHello|scanSetup" bridge/lua || true
+          nl -ba build/app/DragLab_Server.ps1 | sed -n '820,1010p'

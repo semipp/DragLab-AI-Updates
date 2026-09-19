@@ -5,7 +5,7 @@ on:
     paths:
       - 'release/version.txt'
       - 'release/notes.md'
-      - 'release/build_v039.py'
+      - 'release/build_v0310.py'
       - '.github/workflows/publish-release.yml'
 
 permissions:
@@ -18,17 +18,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build v0.3.9 from verified v0.3.8 base
+      - name: Build v0.3.10 from verified v0.3.9 base
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          rm -rf base build bridge_work_v039 verify_app
+          rm -rf base build bridge_work_v0310 verify_app
           mkdir -p base build
-          gh release download v0.3.8 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          gh release download v0.3.9 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-          python3 release/build_v039.py build
+          python3 release/build_v0310.py build
 
           rm -f release/DragLab_Update.zip
           (cd build && zip -qr ../release/DragLab_Update.zip app)
@@ -36,52 +36,52 @@ jobs:
           test "$(stat -c%s release/DragLab_Update.zip)" -gt 30000
           unzip -t release/DragLab_Update.zip
 
-      - name: Verify v0.3.9 package
+      - name: Verify v0.3.10 package
         shell: bash
         run: |
           python3 - <<'PY'
           import json, zipfile, io
           z = zipfile.ZipFile('release/DragLab_Update.zip')
           v = json.loads(z.read('app/version.json'))
-          assert v['version'] == '0.3.9'
-          assert v['bridgeVersion'] == '0.3.9'
+          assert v['version'] == '0.3.10'
+          assert v['bridgeVersion'] == '0.3.10'
 
           server = z.read('app/DragLab_Server.ps1').decode()
           required = [
-              "foundationRepaired = $false",
-              "Get-Stage1FoundationRun",
-              "Begin-Stage2FromFoundation",
-              "Resume-Stage2FromBest",
-              "v0.3.9 detected the v0.3.8 foundation bug",
-              "Invalid Stage 2 decisions were discarded",
-              "RESTORING STAGE 1 FOUNDATION",
-              "stage2-foundation",
-              "stage2-resume",
-              "foundationRepaired=[bool]$autoTune.foundationRepaired",
-              "Get-AutoTuneCandidates $foundationRun.setup 2",
+              "$script:playerVehicleId = $null",
+              "$script:ignoredVehiclePackets = 0",
+              "function Handle-UdpMessage([string]$text, $senderRemote)",
+              "if ($msg.type -eq 'player_vehicle_status')",
+              "if ([string]$msg.vehicleId -ne [string]$script:playerVehicleId)",
+              "$script:beamRemote = [System.Net.IPEndPoint]::new($senderRemote.Address, $senderRemote.Port)",
+              "Handle-UdpMessage $text $senderRemote",
+              "playerVehicleId = $script:playerVehicleId",
+              "ignoredVehiclePackets = [int]$script:ignoredVehiclePackets",
           ]
           for needle in required:
               assert needle in server, needle
 
-          # Make sure the migration really resets invalid v0.3.8 Stage 2 state.
-          assert "$autoTune.candidateIndex = 0" in server
-          assert "$autoTune.history = New-Object System.Collections.ArrayList" in server
-          assert "$autoTune.bestSetup = @($foundationRun.setup)" in server
-          assert "$autoTune.bestEt = [double]$foundationRun.et" in server
-
-          html = z.read('app/www/index.html').decode()
-          assert '0.3.9' in html
-          assert 'anchored to the proven Stage 1 best' in html
-
-          setup = z.read('app/Setup_JLRP_Run_Sync.ps1').decode()
-          sync = z.read('app/Sync_JLRP_RunData.ps1').decode()
-          for txt in (setup, sync):
-              assert "$authExit = $LASTEXITCODE" in txt
+          # The old unsafe global last-sender command routing must be gone.
+          assert "$script:beamRemote = [System.Net.IPEndPoint]::new($remote.Address, $remote.Port)" not in server
 
           bz = zipfile.ZipFile(io.BytesIO(z.read('app/BeamNG_Mod/draglab_bridge_v0.2.zip')))
+          ge = bz.read('lua/ge/extensions/draglabOfficialSync.lua').decode()
+          for needle in [
+              "local playerHeartbeatTimer = 0",
+              "type='player_vehicle_status'",
+              "playerVehicleId=getPlayerVehicleId()",
+              "playerHeartbeatTimer >= 0.5",
+          ]:
+              assert needle in ge, needle
+
           info = json.loads(bz.read('info.json'))
-          assert info['version'] == '0.3.9'
-          print('Verified JLRP v0.3.9 Stage 2 foundation continuity repair')
+          assert info['version'] == '0.3.10'
+
+          html = z.read('app/www/index.html').decode()
+          assert '0.3.10' in html
+          assert 'actual player vehicle' in html
+
+          print('Verified JLRP v0.3.10 player-vehicle routing lock')
           PY
 
           mkdir -p verify_app

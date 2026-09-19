@@ -1,17 +1,16 @@
-# JLRP DragLab v0.3.10
+# JLRP DragLab v0.3.11
 
-## Player vehicle routing lock
+## OFFICIAL PB foundation promotion
 
-BeamNG loads JLRP's vehicle telemetry extension in **every spawned vehicle**, including AI traffic. In v0.3.9, the desktop server accepted whichever vehicle packet arrived last, so a Simple Traffic Vehicle could overwrite the R35 dashboard state and even steal the outbound Auto-Tune command endpoint.
+This release corrects the stored Stage 2 baseline for an existing v0.3.10 session **without deleting or rebasing run history**.
 
-v0.3.10 fixes that at the routing layer:
+- Before an unstarted Stage 2 resumes, JLRP checks the current player vehicle's saved runs.
+- Only **BeamNG OFFICIAL** runs with a **complete captured setup matching the live scanner count** are eligible.
+- The fastest eligible run becomes `bestRunId`, `bestEt`, `bestSetup`, and the Stage 2 baseline.
+- The migration is allowed only when Stage 2 is at candidate index 0 with no Stage 2 decision history or pending experiment.
+- Once a normal Stage 2 foundation exists, the migration is permanently marked complete so later tuning progress is never rewritten.
+- **Restore Best Setup**, **Start Auto-Tune**, and the Auto-Tune status path all use the promoted PB.
+- Full captured setup restore is preserved; Auto-Tune still changes one variable at a time and BeamNG OFFICIAL quarter-mile ET remains the KEEP/REVERT judge.
+- v0.3.10 player-vehicle routing remains unchanged.
 
-- The GE-side bridge sends the authoritative **player 0 vehicle ID** twice per second.
-- Desktop JLRP ignores telemetry, setup, run, and command-ack packets from non-player vehicles.
-- Only the actual player vehicle can update Vehicle / Setup Scanner / Auto-Tune verification.
-- Only the actual player vehicle's UDP endpoint can receive tune commands.
-- AI traffic can remain enabled and spawned without contaminating JLRP.
-- Player vehicle changes and respawns automatically reacquire the correct endpoint.
-- Stage 2 foundation state from v0.3.9 is preserved; after updating, Start Auto-Tune restores the 6.212 Stage 1 foundation and resumes cleanly.
-
-This directly fixes the Simple Traffic Vehicle / 2 tunable variables issue while the R35 is still open.
+For the current Nissan GTR R35 data this promotes the recorded **6.207 OFFICIAL** PB and its complete 39-variable setup.

@@ -1,16 +1,15 @@
-# JLRP DragLab v0.3.11
+# JLRP DragLab v0.3.12
 
-## OFFICIAL PB foundation promotion
+## Auto-Tune OFFICIAL decision recovery
 
-This release corrects the stored Stage 2 baseline for an existing v0.3.10 session **without deleting or rebasing run history**.
+Fixes the case where a BeamNG OFFICIAL pass is visible in JLRP but Auto-Tune remains stuck on **WAITING FOR OFFICIAL PASS**.
 
-- Before an unstarted Stage 2 resumes, JLRP checks the current player vehicle's saved runs.
-- Only **BeamNG OFFICIAL** runs with a **complete captured setup matching the live scanner count** are eligible.
-- The fastest eligible run becomes `bestRunId`, `bestEt`, `bestSetup`, and the Stage 2 baseline.
-- The migration is allowed only when Stage 2 is at candidate index 0 with no Stage 2 decision history or pending experiment.
-- Once a normal Stage 2 foundation exists, the migration is permanently marked complete so later tuning progress is never rewritten.
-- **Restore Best Setup**, **Start Auto-Tune**, and the Auto-Tune status path all use the promoted PB.
-- Full captured setup restore is preserved; Auto-Tune still changes one variable at a time and BeamNG OFFICIAL quarter-mile ET remains the KEEP/REVERT judge.
-- v0.3.10 player-vehicle routing remains unchanged.
+- Normalizes persisted Auto-Tune decision history back to a mutable ArrayList after JSON reload.
+- Safely preserves an already-verified experiment that is waiting only for its OFFICIAL timeslip across a desktop restart/update.
+- Recovers the **first matching OFFICIAL full-setup run recorded after the experiment started**, so a pass already made does not need to be repeated.
+- Recovery requires the exact full setup expected for the one-variable experiment.
+- Keeps the 6.207 PB foundation unchanged when a slower recovered pass is judged.
+- Wraps the Auto-Tune judge so an Auto-Tune bookkeeping error can never again prevent a valid OFFICIAL pass from being saved/private-synced.
+- Preserves all run history, Stage 2 progress, full-setup restore behavior, and v0.3.10 player-vehicle routing.
 
-For the current Nissan GTR R35 data this promotes the recorded **6.207 OFFICIAL** PB and its complete 39-variable setup.
+For the current R35 session, the saved **6.319 OFFICIAL** pass at front tyre **28.0 psi** will be recovered and judged against the **6.207** PB foundation. It should REVERT, not become the new best.

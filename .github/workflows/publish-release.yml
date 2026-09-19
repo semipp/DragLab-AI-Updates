@@ -5,7 +5,7 @@ on:
     paths:
       - 'release/version.txt'
       - 'release/notes.md'
-      - 'release/build_v0311.py'
+      - 'release/build_v0312.py'
       - '.github/workflows/publish-release.yml'
 
 permissions:
@@ -18,7 +18,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build v0.3.11 from verified v0.3.10 base
+      - name: Build v0.3.12 from verified v0.3.11 base
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
@@ -26,9 +26,9 @@ jobs:
           set -euo pipefail
           rm -rf base build verify_app
           mkdir -p base build
-          gh release download v0.3.10 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
+          gh release download v0.3.11 --repo semipp/DragLab-AI-Updates --pattern DragLab_Update.zip --dir base --clobber
           unzip -q base/DragLab_Update.zip -d build
-          python3 release/build_v0311.py build
+          python3 release/build_v0312.py build
 
           rm -f release/DragLab_Update.zip
           (cd build && zip -qr ../release/DragLab_Update.zip app)
@@ -36,43 +36,44 @@ jobs:
           test "$(stat -c%s release/DragLab_Update.zip)" -gt 30000
           unzip -t release/DragLab_Update.zip
 
-      - name: Verify v0.3.11 package
+      - name: Verify v0.3.12 package
         shell: bash
         run: |
           python3 - <<'PY'
-          import json, zipfile, io, re
+          import json, zipfile, io
           z = zipfile.ZipFile('release/DragLab_Update.zip')
           v = json.loads(z.read('app/version.json'))
-          assert v['version'] == '0.3.11'
+          assert v['version'] == '0.3.12'
           assert v['bridgeVersion'] == '0.3.10'
 
           server = z.read('app/DragLab_Server.ps1').decode()
           required = [
-              "pbFoundationPromoted = $false",
-              "'stage','foundationRepaired','pbFoundationPromoted'",
-              "function Get-FastestOfficialFullSetupPb",
-              "function Promote-FastestOfficialPbIfEligible",
-              "if ([int]$autoTune.candidateIndex -ne 0) { return $false }",
-              "if (@($autoTune.history).Count -ne 0) { return $false }",
-              "if ($null -ne $autoTune.currentExperiment -or $null -ne $autoTune.pendingApply) { return $false }",
-              "if ([string]$r.timingSource -ne 'beamng-official') { continue }",
-              "if ($null -eq $r.setup -or @($r.setup).Count -ne $expectedCount) { continue }",
-              "$autoTune.bestSetup = @($pb.setup)",
-              "$autoTune.candidateStates = @($candidates)",
-              "$autoTune.pbFoundationPromoted = $true",
-              "pbFoundationPromoted=[bool]$autoTune.pbFoundationPromoted",
+              "$historyList = New-Object System.Collections.ArrayList",
+              "[void]$historyList.Add($h)",
+              "$autoTune.history = $historyList",
+              "$resumeWaitingForOfficial",
+              "$autoTune.phase = 'WAITING FOR OFFICIAL PASS'",
+              "function Recover-MissedOfficialAutoTunePass",
+              "if (-not (Test-SetupMatchesValues $r.setup $expected)) { continue }",
+              "$runUtc -le $started",
+              "$missed = @($eligible | Sort-Object { Get-RunUtc $_ })[0]",
+              "On-OfficialRunFinalizedForAutoTune $missed",
+              "[void](Recover-MissedOfficialAutoTunePass)",
+              "Auto-Tune OFFICIAL judge failed:",
+              "Request-RunSync 'official-pass'",
               "$script:playerVehicleId = $null",
               "if ([string]$msg.vehicleId -ne [string]$script:playerVehicleId)",
+              "pbFoundationPromoted=[bool]$autoTune.pbFoundationPromoted",
           ]
           for needle in required:
               assert needle in server, needle
-          assert server.count("[void](Promote-FastestOfficialPbIfEligible)") >= 3
 
-          helper = server.split("function Promote-FastestOfficialPbIfEligible",1)[1].split("function Resume-Stage2FromBest",1)[0]
-          assert "$autoTune.history =" not in helper
-          assert "$runs.Clear()" not in helper
+          # The official pass sync call must remain after the isolated judge block.
+          pos_judge = server.index("try {\n        On-OfficialRunFinalizedForAutoTune $run")
+          pos_sync = server.index("Request-RunSync 'official-pass'", pos_judge)
+          assert pos_sync > pos_judge
 
-          # v0.3.10 routing safety must remain intact.
+          # Existing player-routing safety remains mandatory.
           assert "$script:beamRemote = [System.Net.IPEndPoint]::new($remote.Address, $remote.Port)" not in server
           assert "$script:beamRemote = [System.Net.IPEndPoint]::new($senderRemote.Address, $senderRemote.Port)" in server
 
@@ -84,10 +85,9 @@ jobs:
           assert info['version'] == '0.3.10'
 
           html = z.read('app/www/index.html').decode()
-          assert '0.3.11' in html
-          assert 'fastest verified OFFICIAL full-setup PB' in html
-
-          print('Verified JLRP v0.3.11 OFFICIAL PB foundation promotion')
+          assert '0.3.12' in html
+          assert 'recovers any saved OFFICIAL pass' in html
+          print('Verified JLRP v0.3.12 Auto-Tune OFFICIAL decision recovery')
           PY
 
           mkdir -p verify_app
